@@ -127,31 +127,45 @@ def pace(seconds: float) -> None:
         time.sleep(seconds)
 
 
-def step(msg: str) -> None:
-    human().print(f"[bold cyan]·[/bold cyan] {msg}")
+
+# ---- stage-block narration -------------------------------------------------
+# An EXECUTED stage is an indented block with a blank line above it. A REUSED
+# stage is a single line. That way a finished re-run stays compact instead of
+# printing five blocks that did no work, and a stage that really ran is
+# impossible to miss. No boxes here: the running log is a log. The final
+# report gets a box, because a report is a discrete block of result.
+
+IND = " " * 7
 
 
-def ok(msg: str) -> None:
-    human().print(f"[bold green]✓[/bold green] {msg}")
+def head(idx: int, name: str) -> None:
+    human().print(f"\n[bold cyan]{idx}/{len(STAGES)}[/bold cyan]  [bold]{name}[/bold]")
 
 
-def warn(msg: str) -> None:
-    human().print(f"[bold yellow]![/bold yellow] {msg}")
+def skipped(idx: int, name: str, gist: str) -> None:
+    human().print(f"[dim]{idx}/{len(STAGES)}[/dim]  {name:<11}"
+                  f"[blue]reused[/blue]   [dim]{gist}[/dim]")
 
 
-def reuse(msg: str) -> None:
-    """Resuming is never silent — this is the whole point of resume-by-default."""
-    human().print(f"[bold blue]=[/bold blue] {msg} [dim](reused; --force to redo)[/dim]")
+def field(label: str, value: str) -> None:
+    human().print(f"{IND}[dim]{label:<10}[/dim] {value}")
 
 
-def detail(msg: str) -> None:
-    human().print(f"  [dim]{msg}[/dim]")
+def flag(msg: str, hint: str | None = None) -> None:
+    human().print(f"{IND}[bold yellow]![/bold yellow] {msg}")
+    if hint:
+        human().print(f"{IND}  [dim]{hint}[/dim]")
+
+
+def done(msg: str) -> None:
+    human().print(f"{IND}[green]✓[/green] [dim]{msg}[/dim]")
 
 
 def fail(msg: str, hint: str | None = None) -> None:
-    err.print(f"[bold red]✗[/bold red] {msg}")
+    err.print(f"\n[bold red]✗[/bold red] {msg}")
     if hint:
         err.print(f"  [dim]{hint}[/dim]")
+
 
 
 def slug(v: dict) -> str:
@@ -211,52 +225,63 @@ def resolve_dir(target: str, output: Path) -> Path:
 def do_acquire(root: Path, st: dict, url: str) -> dict:
     v = VIDEO[SIM.case]
     if "acquire" in st["done"] and not SIM.force:
-        reuse(f"Acquire: {v['title']} ({v['dur']}, {v['res']})")
+        skipped(1, "acquire", f"{v['title']} · {v['dur']} · {v['res']}")
         return v
-    step(f"Acquiring {url}")
+    head(1, "acquire")
+    field("source", url)
     pace(0.6)
     if SIM.case is Case.fail:
-        fail("yt-dlp could not extract the video (HTTP 429 from YouTube)",
-             "Rate limited. Retry later.")
+        flag("yt-dlp could not extract the video (HTTP 429 from YouTube)")
+        fail("Acquire failed. Nothing was written.", "Rate limited. Retry later.")
         if SIM.report is Report.json:
             print(json.dumps(dict(status="error", error="rate_limited",
                                   message="yt-dlp could not extract the video (HTTP 429)",
                                   retryable=True), indent=2))
         raise typer.Exit(code=2)
-    detail(f"title      {v['title']}")
-    detail(f"duration   {v['dur']}   resolution {v['res']}")
+    field("title", v["title"])
+    field("duration", f"{v['dur']}   resolution {v['res']}")
     if SIM.case is Case.no_caption:
-        detail("captions   none (checked automatic_captions and subtitles)")
+        field("captions", "none (checked automatic_captions and subtitles)")
     else:
-        detail(f"captions   automatic ASR, {v['lang']}-orig (word timings: yes)")
-    detail("video      format 22 (720p) · 214 MB")
-    ok("Acquire complete")
+        field("captions", f"automatic ASR, {v['lang']}-orig (word timings: yes)")
+    field("video", "format 22 (720p) · 214 MB")
+    done("acquired in 38s")
     mark(root, st, "acquire")
     return v
 
 
 def do_transcribe(root: Path, st: dict, v: dict) -> dict:
+    caption = SIM.case is not Case.no_caption
     if "transcribe" in st["done"] and not SIM.force:
-        src = "YouTube caption" if SIM.case is not Case.no_caption else "local STT"
-        reuse(f"Transcript: {src}")
-        return dict(source="caption" if SIM.case is not Case.no_caption else "stt",
-                    timings="word" if SIM.case is not Case.no_caption else "segment",
-                    lang=v["lang"], words=11204,
-                    model=None if SIM.case is not Case.no_caption
-                    else "faster-whisper medium int8")
+        skipped(2, "transcribe",
+                f"{'YouTube caption' if caption else 'local STT'} · "
+                f"{'word' if caption else 'segment'}-level timings")
+        return dict(source="caption" if caption else "stt",
+                    timings="word" if caption else "segment", lang=v["lang"],
+                    words=11204 if caption else 10871,
+                    model=None if caption else "faster-whisper medium int8")
 
-    if SIM.case is Case.no_caption:
-        warn("No YouTube caption for this video — falling back to local STT")
-        detail("yt-dlp exits 0 when no caption exists, so this was decided from "
-               "the metadata, not the exit code")
-        step("Transcript: local STT")
-        detail("model    faster-whisper medium int8 · 2 threads · CPU only")
-        detail("this stage is slow by design on the target host")
+    head(2, "transcribe")
+    if caption:
+        field("source", f"YouTube ASR caption, {v['lang']}-orig, json3")
+        pace(0.8)
+        field("fetched", "1 track · 1,842 events · 11,204 words")
+        field("timings", "word-level")
+        done("transcribed in 4s")
+        tr = dict(source="caption", timings="word", lang=v["lang"], words=11204,
+                  model=None)
+    else:
+        flag("No YouTube caption for this video — falling back to local STT",
+             "yt-dlp exits 0 when no caption exists, so this was decided from "
+             "the metadata, not the exit code")
+        field("source", "local STT")
+        field("model", "faster-whisper medium int8 · 2 threads · CPU only")
+        field("note", "this stage is slow by design on the target host")
         total = 24
         if sys.stdout.isatty() and SIM.report is Report.text:
             from rich.progress import (BarColumn, Progress, TextColumn,
                                        TimeElapsedColumn, TimeRemainingColumn)
-            with Progress(TextColumn("  transcribing"), BarColumn(bar_width=30),
+            with Progress(TextColumn(IND + "transcribing"), BarColumn(bar_width=28),
                           TextColumn("{task.percentage:>3.0f}%"),
                           TextColumn("[dim]{task.fields[at]}[/dim]"),
                           TimeElapsedColumn(), TimeRemainingColumn(),
@@ -269,71 +294,71 @@ def do_transcribe(root: Path, st: dict, v: dict) -> dict:
         else:
             for i in range(0, total, 6):
                 pace(0.12)
-                human().print(f"  transcribing … {i * 100 // total:>3d}% "
-                              f"(audio {i * 105 // 60:02d}:{i * 105 % 60:02d})")
-        ok(f"Transcript from LOCAL STT (faster-whisper medium int8, {v['lang']})")
+                human().print(f"{IND}[dim]transcribing[/dim] {i * 100 // total:>3d}% "
+                              f"[dim](audio {i * 105 // 60:02d}:{i * 105 % 60:02d})[/dim]")
+        field("timings", "segment-level")
+        done("transcribed in 41m 08s")
         tr = dict(source="stt", timings="segment", lang=v["lang"], words=10871,
                   model="faster-whisper medium int8")
-    else:
-        step(f"Transcript: YouTube ASR caption ({v['lang']}-orig, json3)")
-        pace(0.8)
-        detail("fetched  1 track · 1,842 events · 11,204 words · timings word-level")
-        ok(f"Transcript from YOUTUBE CAPTION ({v['lang']}-orig)")
-        tr = dict(source="caption", timings="word", lang=v["lang"], words=11204,
-                  model=None)
     mark(root, st, "transcribe")
     return tr
 
 
 def do_detect(root: Path, st: dict, v: dict) -> dict:
     kept = v["slides"] + v["suspects"]
+    res = dict(candidates=kept + 7, kept=kept, suspects=v["suspects"])
     if "detect" in st["done"] and not SIM.force:
-        reuse(f"Detection: {kept} distinct slides")
-        return dict(candidates=kept + 7, kept=kept, suspects=v["suspects"])
-    step("Detecting slide changes")
+        gist = f"{kept} distinct slides"
+        if v["suspects"]:
+            gist += f" · {v['suspects']} flagged"
+        skipped(3, "detect", gist)
+        return res
+    head(3, "detect")
     pace(0.9)
-    detail(f"scanned  {v['dur']} at 2 fps · {kept + 7} candidate transitions")
-    detail("gate     deterministic (metric family TBD — issue #11)")
-    ok(f"{kept} distinct slides after dedupe")
+    field("scanned", f"{v['dur']} at 2 fps · {kept + 7} candidate transitions")
+    field("gate", "deterministic (metric family TBD — issue #11)")
+    field("kept", f"{kept} distinct slides after dedupe")
     if v["suspects"]:
         n = v["suspects"]
-        warn(f"{n} slide{'' if n == 1 else 's'} flagged as "
-             f"{'a possible duplicate' if n == 1 else 'possible duplicates'} "
-             f"(progressive builds)")
+        flag(f"{n} slide{'' if n == 1 else 's'} flagged as "
+             f"{'a possible duplicate' if n == 1 else 'possible duplicates'}",
+             "progressive builds — inspect with review, remove with drop")
+    done("detected in 2m 51s")
     mark(root, st, "detect")
-    return dict(candidates=kept + 7, kept=kept, suspects=v["suspects"])
+    return res
 
 
 def do_crop(root: Path, st: dict, v: dict) -> dict:
     if "crop" in st["done"] and not SIM.force:
-        reuse("Crop: slide regions already computed")
+        skipped(4, "crop", "manual ROI" if SIM.roi else "auto · 1 full-frame fallback")
         return dict(method="manual-roi" if SIM.roi else "auto", roi=SIM.roi,
                     fallbacks=0 if SIM.roi else 1)
-    step("Cropping to the slide region")
+    head(4, "crop")
     pace(0.6)
     if SIM.roi:
-        detail(f"manual ROI from --roi {SIM.roi}")
-        ok("Crop complete")
+        field("method", f"manual ROI from --roi {SIM.roi}")
+        done("cropped in 6s")
         mark(root, st, "crop")
         return dict(method="manual-roi", roi=SIM.roi, fallbacks=0)
-    detail("layout-stable segments: 2 · region computed once per segment")
-    warn("1 segment fell back to the full frame (no confident slide region)")
-    detail("fallback chain: candidate union → letterbox strip → full frame")
-    ok("Crop complete")
+    field("method", "automatic")
+    field("segments", "2 layout-stable · region computed once per segment")
+    flag("1 segment fell back to the full frame (no confident slide region)",
+         "fallback chain: candidate union → letterbox strip → full frame")
+    done("cropped in 11s")
     mark(root, st, "crop")
     return dict(method="auto", roi=None, fallbacks=1)
 
 
 def do_pair(root: Path, st: dict, v: dict, tr: dict) -> None:
     if "pair" in st["done"] and not SIM.force:
-        reuse("Pairing: manifest already written")
+        skipped(5, "pair", "manifest already written")
         return
-    step("Pairing speech to slides")
+    head(5, "pair")
     pace(0.4)
-    detail(f"transcript timings: {tr['timings']}-level")
+    field("timings", f"{tr['timings']}-level")
     if tr["timings"] == "segment":
-        warn("Segment-level timings only — slide boundaries are approximate")
-    ok("Pairing complete")
+        flag("Segment-level timings only — slide boundaries are approximate")
+    done("paired in 1s")
     mark(root, st, "pair")
 
 
@@ -421,28 +446,45 @@ def final_report(root: Path, v: dict, tr: dict, det: dict, crop: dict) -> None:
             transcript_source=tr["source"], transcript_timings=tr["timings"],
             stt_model=tr["model"], slides=det["kept"], suspects=det["suspects"],
             crop_method=crop["method"], crop_fallbacks=crop["fallbacks"],
-            reused=SIM.reused, elapsed="4m 12s",
+            elapsed="4m 12s",
         ), indent=2))
         return
+
+    # The final report IS a box. This is the one place a border earns its keep:
+    # a discrete block of result, read at a glance, distinct from the log above
+    # it. ADR 0001's "never as a bordered panel" is scoped to --help output.
+    from rich.panel import Panel
+    from rich.table import Table
+
     ns = det["suspects"]
-    dup = (f" · {ns} flagged as "
-           f"{'a possible duplicate' if ns == 1 else 'possible duplicates'}") if ns else ""
-    fb = f" · {crop['fallbacks']} segment(s) fell back to full frame" if crop["fallbacks"] else ""
+    dup = (f" · [yellow]{ns} flagged as "
+           f"{'a possible duplicate' if ns == 1 else 'possible duplicates'}[/yellow]"
+           ) if ns else ""
+    fb = (f" · [yellow]{crop['fallbacks']} full-frame fallback"
+          f"{'' if crop['fallbacks'] == 1 else 's'}[/yellow]") if crop["fallbacks"] else ""
+
+    t = Table.grid(padding=(0, 2))
+    t.add_column(style="dim", justify="left", min_width=10)
+    t.add_column(overflow="fold")
+    t.add_row("transcript", f"{tr['source'].upper()}"
+                            f"{' · ' + tr['model'] if tr['model'] else ''}"
+                            f" · {tr['timings']}-level timings")
+    t.add_row("slides", f"{det['kept']}{dup}")
+    t.add_row("crop", f"{crop['method']}{fb}")
+    t.add_row("elapsed", "4m 12s")
+    t.add_row("output", str(root))
     outc.print("")
-    outc.print("[bold]Done.[/bold]")
-    outc.print(f"  transcript   {tr['source'].upper()}"
-               f"{' (' + tr['model'] + ')' if tr['model'] else ''} · "
-               f"{tr['timings']}-level timings")
-    outc.print(f"  slides       {det['kept']}{dup}")
-    outc.print(f"  crop         {crop['method']}{fb}")
-    outc.print(f"  output       {root}")
-    outc.print(f"  elapsed      4m 12s")
+    outc.print(Panel(t, title="[bold]Done[/bold]", title_align="left",
+                     border_style="dim", padding=(1, 2), expand=False))
+
     if ns:
         flagged = " ".join(str(det["kept"] - i) for i in reversed(range(ns)))
-        outc.print("")
-        outc.print("Next:")
+        outc.print("\nNext:")
         outc.print(f"  {PROG} review {root}")
         outc.print(f"  {PROG} drop {root} {flagged}")
+        outc.print("")
+    outc.print("[dim]MOCK: the tree below is here so the --layout choice can be "
+               "judged. A real run would print the path, not 35 filenames.[/dim]")
     print_tree(root)
 
 
@@ -457,8 +499,9 @@ def pipeline(root: Path, url: str, redo: Optional[str] = None,
     if redo:
         chain = [s for s in STAGES if s == redo or s in DOWNSTREAM[redo]]
         if len(chain) > 1:
-            detail(f"{redo} invalidates {', '.join(chain[1:])} — "
-                   f"re-running {'those' if len(chain) > 2 else 'that'} too")
+            human().print(f"[dim]{redo} invalidates {', '.join(chain[1:])} — "
+                          f"re-running {'those' if len(chain) > 2 else 'that'} "
+                          f"too[/dim]")
         invalidate(root, st, chain)
         st = read_state(root)
 
@@ -475,7 +518,8 @@ def pipeline(root: Path, url: str, redo: Optional[str] = None,
         do_pair(root, st, v, tr)
 
     if upto:
-        ok(f"Step 1 complete. Next:  {PROG} {root}")
+        human().print(f"\n[bold]Step 1 complete.[/bold]  "
+                      f"[dim]continue with:[/dim]  {PROG} {root}")
         return
     write_tree(root, v, tr, det, crop)
     final_report(root, v, tr, det, crop)
@@ -489,17 +533,20 @@ def do_drop(root: Path, numbers: list[int]) -> None:
         raise typer.Exit(code=2)
     data = json.loads(mf.read_text())
     keep = [s for s in data["slides"] if s["n"] not in numbers]
-    step(f"Dropping {len(numbers)} slide(s): {', '.join(str(n) for n in sorted(numbers))}")
-    detail(f"{len(data['slides'])} slides → {len(keep)} slides")
-    for i, s in enumerate(keep, start=1):
-        if s["n"] != i:
-            detail(f"renumber {s['n']:03d} → {i:03d}")
-        s["n"] = i
+    outc.print("\n[bold]drop[/bold]")
+    field("slides", f"{', '.join(str(n) for n in sorted(numbers))}")
+    field("count", f"{len(data['slides'])} → {len(keep)}")
+    renumbered = 0
+    for i, sl in enumerate(keep, start=1):
+        if sl["n"] != i:
+            renumbered += 1
+        sl["n"] = i
+    field("renumbered", f"{renumbered} slide(s) shifted down")
     data["slides"] = keep
     mf.write_text(json.dumps(data, indent=2) + "\n")
-    ok("Files deleted, remaining slides renumbered, manifest rewritten")
-    warn("Renumbering means a slide number is NOT a stable identity across a "
-         "drop — whether the manifest also keeps a stable id is issue #14")
+    done("files deleted, survivors renumbered, manifest rewritten")
+    flag("A slide number is NOT a stable identity across a drop",
+         "whether the manifest also keeps a stable id is issue #14")
 
 
 # ----------------------------------------------------------------------------
@@ -640,7 +687,7 @@ def review(
         raise typer.Exit(code=2)
     flagged = [s for s in json.loads(mf.read_text())["slides"] if s["suspect"]]
     if not flagged:
-        ok("Nothing flagged. Every slide looks distinct.")
+        outc.print("[green]✓[/green] Nothing flagged. Every slide looks distinct.")
         return
     outc.print(f"[bold]{len(flagged)} slide(s) flagged as possible duplicates[/bold]\n")
     for s in flagged:

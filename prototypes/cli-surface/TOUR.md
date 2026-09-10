@@ -44,6 +44,9 @@ What it encodes:
 - **A stage command chains forward** into the stages that depend on it, so a redone
   `detect` cannot leave a stale manifest and stale crops behind. `crop` and `pair`
   stop at themselves — cropping changes pixels, not slide count or timing.
+- **The final report is a box, the running log is not.** A border earns its keep on a
+  discrete block of result, not on a log. ADR 0001's "never as a bordered panel" is
+  therefore scoped to `--help` output, which is what its reasoning was about.
 - **State lives inside the output directory** (`.extract-slides.json`), per video.
   Not a global run index; that was the variant-C abstraction that got ruled out.
 - **Transcript-only is out of scope.** `yt-dlp` already downloads a ready caption.
@@ -126,9 +129,10 @@ $E ./crop        # -> treated as the file
    consequence "it remains reversible because typer is click underneath" needs a
    correction: falling back to plain click now means adding a real dependency.
 
-2. **A fully-finished run is a noisy no-op.** Re-running the bare root when every stage
-   is done prints five reused lines, then the whole report and tree. Whether a complete
-   run should short-circuit with one line instead is still open.
+2. **A fully-finished run was a noisy no-op**, and the output format fixed it. An
+   **executed** stage is an indented block with a blank line around it; a **reused**
+   stage is a single line. So a finished re-run is five compact lines, and a partial
+   re-run reads at a glance: two reuse lines, then three blocks that really ran.
 
 ## Not proposed here, on purpose
 
