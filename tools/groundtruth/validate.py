@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Check a ground-truth file against the schema in ADR 0003.
+"""Check a ground-truth file against the schema in ADR 0003, as amended.
+
+The amended schema (ADR 0003, Amendments, 2026-09-11) drops `layout_segments`,
+carries `slide_rect` and `rect_holds_s` on each expected slide, and adds a
+top-level `repeats` list for content that comes back.
 
 The ground truth is the measuring stick for every detection and crop decision in
 this project, so a malformed file is worse than a missing one: it would silently
@@ -46,9 +50,12 @@ def check_file(path: Path) -> list[str]:
         return [f"{path}: not valid JSON: {exc}"]
 
     for key in ("video", "class", "role", "duration_s", "resolution",
-                "layout_segments", "slides", "provenance"):
+                "slides", "provenance"):
         if key not in doc:
             fail(errs, f"missing top-level key {key!r}")
+    if "layout_segments" in doc:
+        fail(errs, "layout_segments was removed by ADR 0003 decision 4; each slide "
+                   "carries its own slide_rect and rect_holds_s")
     if errs:
         return [f"{path}: {e}" for e in errs]
 
@@ -69,68 +76,89 @@ def check_file(path: Path) -> list[str]:
         fail(errs, "duration_s must be a positive number")
         dur = float("inf")
 
-    segs = doc["layout_segments"]
-    if not isinstance(segs, list) or not segs:
-        fail(errs, "layout_segments must be a non-empty list")
-    else:
-        prev_to = 0.0
-        for k, s in enumerate(segs):
-            w = f"layout_segments[{k}]"
-            for key in ("from_s", "to_s", "slide_rect"):
-                if key not in s:
-                    fail(errs, f"{w}: missing {key!r}")
-            if "slide_rect" in s:
-                check_rect(errs, w, s["slide_rect"])
-            if {"from_s", "to_s"} <= s.keys():
-                if s["from_s"] >= s["to_s"]:
-                    fail(errs, f"{w}: from_s >= to_s")
-                if abs(s["from_s"] - prev_to) > 0.001:
-                    fail(errs, f"{w}: starts at {s['from_s']} but previous segment "
-                               f"ended at {prev_to}; segments must tile the video "
-                               f"with no gap and no overlap")
-                prev_to = s["to_s"]
-        if segs and abs(prev_to - dur) > 1.0:
-            fail(errs, f"layout_segments end at {prev_to} but duration_s is {dur}")
-
     slides = doc["slides"]
     if not isinstance(slides, list) or not slides:
         fail(errs, "slides must be a non-empty list")
-    else:
-        for k, s in enumerate(slides):
-            w = f"slides[{k}]"
-            for key in ("n", "from_s", "to_s", "complete_from_s"):
-                if key not in s:
-                    fail(errs, f"{w}: missing {key!r}")
-            if s.get("n") != k + 1:
-                fail(errs, f"{w}: n={s.get('n')} but should be {k + 1} "
-                           f"(slides are numbered from 1, in order)")
-            if {"from_s", "to_s"} <= s.keys():
-                if s["from_s"] >= s["to_s"]:
-                    fail(errs, f"{w}: from_s >= to_s")
-                if s["to_s"] > dur + 1.0:
-                    fail(errs, f"{w}: to_s={s['to_s']} past duration_s={dur}")
-            cf = s.get("complete_from_s")
-            if cf is not None and {"from_s", "to_s"} <= s.keys():
-                if not s["from_s"] - 0.001 <= cf <= s["to_s"]:
-                    fail(errs, f"{w}: complete_from_s={cf} outside "
-                               f"[{s['from_s']}, {s['to_s']}]")
-            for j, gap in enumerate(s.get("offscreen", []) or []):
-                gw = f"{w}.offscreen[{j}]"
-                if not (isinstance(gap, list) and len(gap) == 2):
-                    fail(errs, f"{gw}: must be [from_s, to_s]")
-                    continue
-                if gap[0] >= gap[1]:
-                    fail(errs, f"{gw}: from_s >= to_s")
-                if "from_s" in s and "to_s" in s and not (
-                        s["from_s"] <= gap[0] and gap[1] <= s["to_s"]):
-                    fail(errs, f"{gw}: outside the slide's own interval")
-        # The metric matches a capture to the expected slide whose interval
-        # contains it, so overlapping intervals would make a match ambiguous.
-        for a, b in zip(slides, slides[1:]):
-            if {"to_s"} <= a.keys() and {"from_s"} <= b.keys():
-                if b["from_s"] < a["to_s"] - 0.001:
-                    fail(errs, f"slides {a.get('n')} and {b.get('n')} overlap in "
-                               f"time; the timestamp match would be ambiguous")
+        slides = []
+    for k, s_ in enumerate(slides):
+        w = f"slides[{k}]"
+        for key in ("n", "from_s", "to_s", "complete_from_s", "slide_rect",
+                    "rect_holds_s"):
+            if key not in s_:
+                fail(errs, f"{w}: missing {key!r}")
+        if s_.get("n") != k + 1:
+            fail(errs, f"{w}: n={s_.get('n')} but should be {k + 1} "
+                       f"(slides are numbered from 1, in order)")
+        if "slide_rect" in s_:
+            check_rect(errs, w, s_["slide_rect"])
+        if {"from_s", "to_s"} <= s_.keys():
+            if s_["from_s"] >= s_["to_s"]:
+                fail(errs, f"{w}: from_s >= to_s")
+            if s_["to_s"] > dur + 1.0:
+                fail(errs, f"{w}: to_s={s_['to_s']} past duration_s={dur}")
+        cf = s_.get("complete_from_s")
+        if cf is not None and {"from_s", "to_s"} <= s_.keys():
+            if not s_["from_s"] - 0.001 <= cf <= s_["to_s"]:
+                fail(errs, f"{w}: complete_from_s={cf} outside "
+                           f"[{s_['from_s']}, {s_['to_s']}]")
+        # rect_holds_s says where the rectangle is valid; a capture outside it is
+        # excluded from the crop metric (ADR 0003 decision 8), so an interval
+        # that does not overlap the slide's own life would score nothing at all.
+        rh = s_.get("rect_holds_s")
+        if rh is not None:
+            if not (isinstance(rh, list) and len(rh) == 2):
+                fail(errs, f"{w}: rect_holds_s must be [from_s, to_s]")
+            elif rh[0] >= rh[1]:
+                fail(errs, f"{w}: rect_holds_s from_s >= to_s")
+            elif {"from_s", "to_s"} <= s_.keys() and not (
+                    rh[0] < s_["to_s"] and rh[1] > s_["from_s"]):
+                fail(errs, f"{w}: rect_holds_s {rh} does not overlap the slide's "
+                           f"own interval, so its rectangle scores nothing")
+        for j, gap in enumerate(s_.get("offscreen", []) or []):
+            gw = f"{w}.offscreen[{j}]"
+            if not (isinstance(gap, list) and len(gap) == 2):
+                fail(errs, f"{gw}: must be [from_s, to_s]")
+                continue
+            if gap[0] >= gap[1]:
+                fail(errs, f"{gw}: from_s >= to_s")
+            if {"from_s", "to_s"} <= s_.keys() and not (
+                    s_["from_s"] <= gap[0] and gap[1] <= s_["to_s"]):
+                fail(errs, f"{gw}: outside the slide's own interval")
+
+    # The metric matches a capture to the expected slide whose interval contains
+    # it, so overlapping intervals would make a match ambiguous. ADR 0003
+    # decision 2 exists to keep this list disjoint and ordered.
+    for a, b in zip(slides, slides[1:]):
+        if "to_s" in a and "from_s" in b and b["from_s"] < a["to_s"] - 0.001:
+            fail(errs, f"slides {a.get('n')} and {b.get('n')} overlap in time; "
+                       f"the timestamp match would be ambiguous. A slide that "
+                       f"comes back after other slides is a repeats entry, not "
+                       f"an overlapping interval (ADR 0003 decision 2)")
+
+    n_slides = len(slides)
+    for k, r in enumerate(doc.get("repeats", []) or []):
+        w = f"repeats[{k}]"
+        for key in ("of_n", "from_s", "to_s"):
+            if key not in r:
+                fail(errs, f"{w}: missing {key!r}")
+        of_n = r.get("of_n")
+        if isinstance(of_n, int) and not 1 <= of_n <= n_slides:
+            fail(errs, f"{w}: of_n={of_n} names no slide (1..{n_slides})")
+        if {"from_s", "to_s"} <= r.keys():
+            if r["from_s"] >= r["to_s"]:
+                fail(errs, f"{w}: from_s >= to_s")
+            if r["to_s"] > dur + 1.0:
+                fail(errs, f"{w}: to_s={r['to_s']} past duration_s={dur}")
+            # A repeat is a window where content already expected comes back, so
+            # it must sit outside the slide it repeats -- otherwise it is that
+            # slide's own life, or an offscreen gap inside it.
+            src = next((x for x in slides if x.get("n") == of_n), None)
+            if src and src.get("from_s") is not None and (
+                    r["from_s"] < src.get("to_s", 0)
+                    and r["to_s"] > src.get("from_s", 0)):
+                fail(errs, f"{w}: overlaps slide {of_n}'s own interval; a gap "
+                           f"inside a slide's life is `offscreen`, not a repeat "
+                           f"(ADR 0003 decision 2)")
 
     prov = doc["provenance"]
     if not isinstance(prov, dict):
@@ -160,12 +188,13 @@ def main(argv: list[str]) -> int:
     for p in paths:
         errs = check_file(p)
         all_errs += errs
-        n_slides = n_segs = "?"
+        n_slides = n_rep = "?"
         if not errs:
             doc = json.loads(p.read_text())
-            n_slides, n_segs = len(doc["slides"]), len(doc["layout_segments"])
+            n_slides = len(doc["slides"])
+            n_rep = len(doc.get("repeats", []) or [])
         status = "OK  " if not errs else "FAIL"
-        print(f"{status} {p}  slides={n_slides} layout_segments={n_segs}")
+        print(f"{status} {p}  slides={n_slides} repeats={n_rep}")
     for e in all_errs:
         print(f"  {e}", file=sys.stderr)
     return 1 if all_errs else 0
