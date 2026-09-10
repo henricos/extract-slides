@@ -24,6 +24,29 @@ What the tool is meant to do, in order:
 - **Reconstructing an editable original file** (e.g. rebuilding a `.pptx`/`.key` from the screenshots). The output is the transcript plus the slide images — not a re-editable deck.
 - **Summarization** (of the whole talk or per slide) is not a default step. If it gets added later, it's an optional, LLM-based extension on top of the structured output above — not a requirement of the core tool.
 
+## Where the detail lives
+
+The technical strategy is being settled decision by decision on the
+[strategy map](https://github.com/henricos/extract-slides/issues/1), with an ADR per
+hard decision.
+
+- [`docs/idea.md`](docs/idea.md) — the idea and requirements.
+- [`docs/adr/`](docs/adr/) — the decisions taken, and why. Start with
+  [0002, the CLI surface](docs/adr/0002-cli-surface.md).
+- [`docs/research/`](docs/research/) — primary-source research behind the decisions:
+  caption acquisition, CPU-only speech-to-text, slide-change detection, slide-region
+  cropping.
+- [`docs/reference-set.md`](docs/reference-set.md) — the fixed set of real videos every
+  detection and crop decision is measured against, and
+  [`docs/reference-set-method.md`](docs/reference-set-method.md) for how to find more.
+- [`docs/similar-tools.md`](docs/similar-tools.md) — prior-art scan.
+
+## Tools
+
+- [`tools/candidates/`](tools/candidates/) — find and screen candidate videos for the
+  reference set without downloading them. Read
+  [`CALIBRATION.md`](tools/candidates/CALIBRATION.md) before writing search queries.
+
 ## License
 
 MIT.
