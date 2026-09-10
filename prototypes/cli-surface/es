@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# THROWAWAY. Runs the CLI surface mock. Usage: ./prototypes/cli-surface/es <args>
+exec uv run --quiet --with typer --with rich \
+  "$(dirname "$0")/mock.py" "$@"

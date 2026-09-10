@@ -2,112 +2,139 @@
 
 **THROWAWAY PROTOTYPE.** Answers [issue #3](https://github.com/henricos/extract-slides/issues/3):
 what is the user-facing surface of the `extract-slides` CLI? Nothing here does real
-work. No video is downloaded, no model is loaded.
+work. No video is downloaded, no model is loaded. The output tree *is* materialised
+with stub files, so the layout can be inspected for real.
 
-Three **radically different command structures** are implemented, switchable with the
-`V` env var. Output layout is a **second, independent axis** (`--layout`) and is really
-materialised on disk, so the tree can be inspected with `tree` or `ls -R`.
-
-Flip through, then steal the best bits from each. The interesting feedback is usually
-"I want B's `transcript` command with A's flat output".
+This file describes the **single surface** the three variants converged on. The
+variants themselves (task verbs / stage verbs / run workspace) are the primary source
+and stay in this branch's history at commit `5aa28c2`.
 
 ## Run it
 
-One command, no setup. `uv` fetches `typer` and `rich` inline.
-
 ```bash
-alias es='uv run --quiet --with typer --with rich prototypes/cli-surface/mock.py'
+E=./prototypes/cli-surface/es    # wrapper: uv fetches typer and rich inline
 
-V=A es --help          # task verbs, one shot
-V=B es --help          # stage verbs, composable
-V=C es --help          # run workspace, resumable
+$E --help
 ```
 
-Every invocation ends with a footer on stderr saying which variant is active and how
-to flip. That footer is the mock's scaffolding, not part of the proposed surface.
+## The surface
 
-## The three variants
+```
+extract-slides URL                 # default path: everything, resuming
+extract-slides URL --force         # ignore existing work, recompute
 
-| | `V=A` task verbs | `V=B` stage verbs | `V=C` run workspace |
-|---|---|---|---|
-| shape | one shot, flags carry everything | one command per stage, `all` chains them | a run is a first-class object |
-| commands | `extract` `drop` `review` | `transcript` `slides` `crop` `pair` `all` `drop` `review` | `new` `run` `status` `ls` `drop` `review` |
-| transcript-only | `extract --transcript-only` | `transcript` (its own command) | `run --from transcript` |
-| re-crop without re-download | not expressible | `crop DIR` | `run --from crop` |
-| resumability | none | implicit, via re-running one stage | explicit, tracked per stage |
-| state on disk | output dir only | output dir only | output dir + a runs index |
-| cost | smallest surface to learn | more commands, each obvious | most machinery; earns it only if resuming matters |
-
-`V=B` matters because the caption research found the transcript path is
-prerequisite-light (no ffmpeg, no JS runtime, no browser) while the video path needs
-all the heavy prerequisites — so "give me just the transcript" can run on a much
-thinner image. `V=C` matters because the map's fog asks whether any stage needs
-caching or resumability to stay usable.
-
-## Drive it into the interesting messages
-
-`--case` picks which simulated video to pretend to process. This is where the mock
-earns its keep: the hard messages, not the happy path.
-
-```bash
-V=A es extract URL --out /tmp/es --case captioned    # happy path: ASR caption exists
-V=A es extract URL --out /tmp/es --case no-caption   # yt-dlp exits 0 with nothing -> STT fallback
-V=A es extract URL --out /tmp/es --case ptbr         # pt-BR caption
-V=A es extract URL --out /tmp/es --case suspects     # 63 min, 11 dedupe suspects
-V=A es extract URL --out /tmp/es --case fail         # HTTP 429 mid-run
-V=A es extract URL --out /tmp/es --case no-caption --slow   # watch the STT progress render
+extract-slides fetch URL           # step 1: acquire + transcribe
+extract-slides transcribe DIR      # redo the transcript, no re-download
+extract-slides detect DIR          # redo detection; chains into crop and pair
+extract-slides crop DIR            # redo the crop only
+extract-slides pair DIR            # redo the pairing and rewrite the manifest
+extract-slides drop DIR N...       # delete duplicates, renumber, rewrite manifest
+extract-slides review DIR          # walk the flagged slides
 ```
 
-`--case no-caption` is the one to look at first. It is the message shape forced by a
-research finding: yt-dlp exits 0 when a video has no caption, indistinguishable from
-success, so the tool must say out loud which transcript source it used rather than
-leaving the operator to guess.
+Stages: `acquire → transcribe → detect → crop → pair`.
 
-## Compare the output layouts
+What it encodes:
+
+- **The bare root is the default path.** No verb for the common case. A first token
+  that is not a known subcommand falls through to the hidden default command.
+- **Only step 1 takes a URL.** Every later stage takes a directory.
+- **Resumes by default, never silently.** Every reused stage prints a `=` line saying
+  so and naming `--force`.
+- **A stage command chains forward** into the stages that depend on it, so a redone
+  `detect` cannot leave a stale manifest and stale crops behind. `crop` and `pair`
+  stop at themselves — cropping changes pixels, not slide count or timing.
+- **State lives inside the output directory** (`.extract-slides.json`), per video.
+  Not a global run index; that was the variant-C abstraction that got ruled out.
+- **Transcript-only is out of scope.** `yt-dlp` already downloads a ready caption.
+
+## Drive it
 
 ```bash
-for L in flat paired staged; do V=A es extract URL --out /tmp/es --layout $L; done
+O=/tmp/es; rm -rf $O
+
+# 1. first run: nothing to resume
+$E "https://youtu.be/X2vr81CJ934" -o $O
+
+# 2. same command again: five reused lines, no work done
+$E "https://youtu.be/X2vr81CJ934" -o $O
+
+# 3. redo one stage; the expensive ones are reused
+D=$O/designing-data-intensive-pipelines-X2vr81CJ934
+$E crop $D          # stops at crop
+$E detect $D        # chains into crop and pair, and says so
+
+# 4. step 1 alone, then continue from it
+rm -rf $O
+$E fetch "https://youtu.be/3sB4Iv_tM7U" -o $O --case no-caption
+$E "https://youtu.be/3sB4Iv_tM7U" -o $O --case no-caption   # reuses the 40-min STT
+
+# 5. force
+$E "https://youtu.be/X2vr81CJ934" -o $O --force
+
+# 6. point the root at the directory instead of the URL
+$E $D
+```
+
+`--case captioned|no-caption|ptbr|suspects|fail` drives the mock into the hard
+messages rather than the happy path. `--case no-caption` is the one to look at first:
+`yt-dlp` exits 0 when a video has no caption, so the tool must name its transcript
+source out loud. `--slow` paces the simulation so the STT progress is watchable.
+
+## Output layouts
+
+Still an open axis — pick one while driving:
+
+```bash
+for L in flat paired staged; do $E "u" -o /tmp/es-$L --layout $L; done
 ```
 
 - **flat** — `slides/001.png` … plus `transcript.md`, `transcript.json`, `manifest.json`.
 - **paired** — one directory per slide: `001/slide.png` + `001/speech.md`.
-- **staged** — numbered by pipeline stage: `01-transcript/`, `02-frames/`, `03-slides/`, `logs/`.
-
-The *data* contract behind these (manifest schema, how a slide is paired with the
-speech said over it) is deliberately not proposed here — it is locked separately in
-[issue #14](https://github.com/henricos/extract-slides/issues/14), which this ticket blocks.
+- **staged** — numbered by stage: `01-transcript/`, `02-frames/`, `03-slides/`, `logs/`.
 
 ## The unattended / agent invocation
 
 ```bash
-V=A es extract URL --out ./out --report json 2>/dev/null
+$E "URL" -o $O --report json 2>/dev/null
 ```
 
-`--report json` puts a single JSON document on stdout and every human line on stderr,
-so an agent parses stdout and a human reads stderr. Failures are machine-readable too:
+A single JSON document on stdout, every human line on stderr. Failures are
+machine-readable too, with exit 2:
 
 ```bash
-V=A es extract URL --case fail --report json 2>/dev/null; echo "exit=$?"
+$E "URL" -o $O --case fail --report json 2>/dev/null; echo "exit=$?"
 ```
 
-## Reconcile: drop, renumber, rewrite
+## The one ambiguity of the bare root, measured
+
+Only a **bare** token colliding with a subcommand name is ambiguous, and it fails
+loudly rather than silently:
 
 ```bash
-V=A es extract URL --out /tmp/es --case suspects
-V=A es review /tmp/es/kubernetes-na-vida-real-63-min-7JbOagrwysE
-V=A es drop   /tmp/es/kubernetes-na-vida-real-63-min-7JbOagrwysE 59 60 61
+touch crop
+$E crop          # -> treated as the subcommand; errors asking for DIR
+$E ./crop        # -> treated as the file
 ```
 
-`drop` deletes, renumbers the survivors, and rewrites the manifest, per the map's
-standing preference. Watch the warning it prints: renumbering means a slide number is
-**not** a stable identity across a drop. Whether the manifest also carries a stable id
-is a question for issue #14.
+## Two things this mock surfaced
 
-## What the mock does NOT propose
+1. **`typer` 0.27 vendors click.** There is no importable `click` module alongside it;
+   it lives as `typer._click`. The bare-root dispatch therefore subclasses
+   `typer.core.TyperGroup`, which worked using only standard `Group` method overrides
+   (`parse_args`, `list_commands`, `format_usage`) and no private imports. But ADR 0001's
+   consequence "it remains reversible because typer is click underneath" needs a
+   correction: falling back to plain click now means adding a real dependency.
 
-- The manifest schema and the slide↔speech pairing rule (issue #14).
-- The concrete shape of review mode. `review` here only lists the flagged slides and
-  says so — whether it is a prompt loop, a contact sheet, or an HTML gallery is still
-  fog on the map.
-- Which detection metric or crop method runs (issues #11, #12, #17). The mock prints
-  `TBD` where a real choice belongs.
+2. **A fully-finished run is a noisy no-op.** Re-running the bare root when every stage
+   is done prints five reused lines, then the whole report and tree. Whether a complete
+   run should short-circuit with one line instead is still open.
+
+## Not proposed here, on purpose
+
+The manifest schema and the slide-to-speech pairing rule ([#14](https://github.com/henricos/extract-slides/issues/14),
+which this ticket blocks); the concrete shape of review mode (still fog on the map —
+`review` only lists the flagged slides); which detection metric or crop method runs
+([#11](https://github.com/henricos/extract-slides/issues/11),
+[#12](https://github.com/henricos/extract-slides/issues/12),
+[#17](https://github.com/henricos/extract-slides/issues/17) — the mock prints `TBD`).
