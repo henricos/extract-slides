@@ -9,3 +9,8 @@ The videos themselves are listed in [`docs/reference-set.md`](../docs/reference-
 These files are hand-verified and are the measuring stick for every detection and crop
 decision in the project. Machine-proposed, human-signed: a file without a `verified_by`
 is a proposal, not ground truth.
+
+[`proposals/`](proposals/) holds the machine half while the human half is pending: the
+candidate states `tools/groundtruth/propose.py` found per video, which are not yet
+grouped into expected slides. [`tools/groundtruth/validate.py`](../tools/groundtruth/validate.py)
+checks a finished file against the schema.
