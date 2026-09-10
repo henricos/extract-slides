@@ -392,8 +392,19 @@ def write_tree(root: Path, v: dict, tr: dict, det: dict, crop: dict) -> None:
 
     if SIM.layout is Layout.flat:
         txt(root / "manifest.json", json.dumps(manifest, indent=2) + "\n")
-        txt(root / "transcript.md", "# Transcript\n\n(prototype stub)\n")
+        txt(root / "transcript.md", "# Transcript\n\n(prototype stub — the whole "
+                                    "video, one document)\n")
         txt(root / "transcript.json", "{}\n")
+        # The reconstructed presentation as a readable document: each slide's
+        # image followed by only the speech said over it. Regenerated from the
+        # manifest, so a drop can never leave it out of sync.
+        body = [f"# {v['title']}\n", f"_{v['dur']} · {v['res']} · "
+                f"transcript from {tr['source']}_\n"]
+        for sl in slides:
+            body.append(f"\n## {sl['n']:03d} · {sl['at']}\n")
+            body.append(f"![Slide {sl['n']:03d}](slides/{sl['n']:03d}.png)\n")
+            body.append("(prototype stub — only the speech said over this slide)\n")
+        txt(root / "presentation.md", "".join(body))
         for s in slides:
             png(root / "slides" / f"{s['n']:03d}.png")
     elif SIM.layout is Layout.paired:
@@ -544,6 +555,7 @@ def do_drop(root: Path, numbers: list[int]) -> None:
     field("renumbered", f"{renumbered} slide(s) shifted down")
     data["slides"] = keep
     mf.write_text(json.dumps(data, indent=2) + "\n")
+    field("regenerated", "presentation.md, from the manifest")
     done("files deleted, survivors renumbered, manifest rewritten")
     flag("A slide number is NOT a stable identity across a drop",
          "whether the manifest also keeps a stable id is issue #14")

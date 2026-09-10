@@ -84,17 +84,33 @@ messages rather than the happy path. `--case no-caption` is the one to look at f
 `yt-dlp` exits 0 when a video has no caption, so the tool must name its transcript
 source out loud. `--slow` paces the simulation so the STT progress is watchable.
 
-## Output layouts
+## Output layout — settled: flat, plus a readable presentation
 
-Still an open axis — pick one while driving:
-
-```bash
-for L in flat paired staged; do $E "u" -o /tmp/es-$L --layout $L; done
+```
+arquitetura-de-dados-na-pratica-C38xlWnkezQ/
+  manifest.json      machine contract (schema is issue #14)
+  presentation.md    each slide's image + only the speech said over it
+  transcript.md      the whole video, one document
+  transcript.json
+  slides/
+    001.png
+    002.png
+    ...
 ```
 
-- **flat** — `slides/001.png` … plus `transcript.md`, `transcript.json`, `manifest.json`.
-- **paired** — one directory per slide: `001/slide.png` + `001/speech.md`.
-- **staged** — numbered by stage: `01-transcript/`, `02-frames/`, `03-slides/`, `logs/`.
+`flat` won because opening `slides/` in any image viewer flips through the whole deck
+in order, which is the likeliest operator gesture. But flat alone had no human-readable
+per-slide speech view — the manifest is JSON, for machines. `presentation.md` closes
+that: it is the reconstructed presentation as a document, with images inline in any
+Markdown preview, and it is the natural input for the deferred extensions (per-slide
+summary, OCR).
+
+It is **regenerated from the manifest**, never patched, so `drop` cannot leave it out of
+sync. That is also why the single file beat per-slide sidecars: sidecars force `drop` to
+renumber two series in step, and a stale orphan is possible.
+
+The other two layouts are still selectable in the mock (`--layout paired|staged`) for
+comparison, but they were not chosen.
 
 ## The unattended / agent invocation
 
