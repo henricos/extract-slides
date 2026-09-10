@@ -68,9 +68,11 @@ explicitly not a goal.
   was rejected because its panels are structural (`HelpPanel` in `cyclopts/core.py`) with
   no plain mode. `click` alone renders the same output; `typer` was preferred for
   type-hint-driven declaration, which is easier for an agent to read and modify, and it
-  remains reversible because `typer` is `click` underneath.
+  remains reversible because `typer` is `click` underneath — but see the amendment below
+  on what "underneath" now means.
 - **`rich` usage:** allowed for the program's own progress output and final report, where
-  richer formatting is wanted. Never as a bordered panel.
+  richer formatting is wanted. Never as a bordered panel **in `--help`** — see the
+  amendment below.
 - **Python floor:** `requires-python = ">=3.12"`, the Ubuntu 24.04 ruler. Note the
   measured alternative: the whole stack also installs on 3.11 wheels-only, resolving
   identical versions except `numpy` 2.4.6 instead of 2.5.3. `>=3.12` was chosen anyway to
@@ -109,3 +111,29 @@ No component is selected here. Every candidate on the detection shortlist
 [#12](https://github.com/henricos/extract-slides/issues/12) choose freely.
 [#13](https://github.com/henricos/extract-slides/issues/13) was never gated by this ticket
 and still picks the STT runtime and model on measurement.
+
+## Amendments
+
+### 2026-09-10 — `typer` vendors `click`, and boxes are banned only in help
+
+Both from [#3](https://github.com/henricos/extract-slides/issues/3), while building the
+CLI surface mock. Neither changes the decision; both correct a consequence stated above.
+
+**`typer` 0.27.2 vendors `click`.** There is no importable `click` module installed
+alongside it: it lives as the private `typer._click`. Two effects.
+
+- "Reversible because `typer` is `click` underneath" is still true in substance, but
+  falling back to plain `click` now means **adding a real dependency**, not dropping a
+  wrapper off something already present.
+- Subclassing for CLI behaviour goes through `typer.core.TyperGroup`. Measured: the
+  verbless default path in [ADR 0002](0002-cli-surface.md) needed exactly this, and it
+  worked using only standard `Group` method overrides (`parse_args`, `list_commands`,
+  `format_usage`) with **no private imports**. So the cost is modest, but code that does
+  `import click` will not run.
+
+**"Never as a bordered panel" is scoped to `--help`.** The original reasoning was about
+`typer`'s help panels, which fragment reference text the reader scans. It over-generalised
+to all `rich` output. A border does earn its keep on the **final report**: a discrete
+block of result, read at a glance, visually distinct from the log above it. The running
+log stays borderless and uses indentation, symbols and whitespace instead. See
+[ADR 0002](0002-cli-surface.md).
