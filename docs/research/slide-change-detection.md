@@ -849,6 +849,15 @@ Two further points from that README worth flagging to the map, because they inde
 
 ### 9.2 `bit-admin/AutoSlides-Extractor` — the most complete actively maintained tool found
 
+> **Corrected by [`reference-implementations.md`](reference-implementations.md), which read the source.**
+> Five claims in this section do not survive contact with the code. It is **not SSIM** but a
+> single-window *global* correlation using SSIM's constants, so the 0.999 / 0.9985 / 0.998 presets are
+> meaningless for a windowed implementation; "3-sample verification" is an all-must-agree look-ahead
+> over two subsequent scores, not a vote; the gate runs through ONNX Runtime over exported JPEGs in
+> post-processing, never on video frames; and the repo also ships a complete tuned slide-bbox
+> detector, which makes it a counter-example to the crop research's greenfield premise. Read
+> [§B.0](reference-implementations.md#b0-corrections) before using anything below.
+
 MIT, 17 stars, pushed **2026-08-12**. A C++/Qt desktop application ("A tool to automatically extract slides from presentation videos with computer vision and machine learning"), with hardware decoding, a chunk processor and a memory optimiser — i.e. engineered for long videos, which is unusual in this field. Not in `docs/similar-tools.md`.
 
 Its detection stack, read from [`src/configmanager.cpp`](https://github.com/bit-admin/AutoSlides-Extractor/blob/main/src/configmanager.cpp) and [`src/clirunner.cpp`](https://github.com/bit-admin/AutoSlides-Extractor/blob/main/src/clirunner.cpp):
@@ -878,6 +887,14 @@ Two parts matter here. The clustering-plus-keypoint-matching step is another ins
 
 ### 9.4 `asindel/SliTraNet` — the CNN reference for this exact problem
 
+> **Corrected by [`reference-implementations.md`](reference-implementations.md), which read the source.**
+> The repo **does** carry a licence — MIT, © 2022 asindel — so the code is liftable, though the
+> Google-Drive weights carry none. The cost verdict below is right and is now quantitative: 507 TFLOPs
+> per 60-minute video against a host that peaks at 145 GFLOP/s, i.e. 2.4–7 h per hour of video, with
+> **82 % of it in the stage that the paper's own ablation shows losing to frame differencing on
+> recall**. See [§E.2](reference-implementations.md#e2-the-authors-own-ablation-beats-their-own-cnn)
+> and [§E.6](reference-implementations.md#e6-cost-on-the-target-host).
+
 Sindel, Hernandez, Yang, Christlein, Maier, *"SliTraNet: Automatic Detection of Slide Transitions in Lecture Videos using Convolutional Neural Networks"*, OAGM Workshop 2021 — [DOI 10.3217/978-3-85125-869-1-10](https://doi.org/10.3217/978-3-85125-869-1-10), [arXiv:2202.03540](https://arxiv.org/pdf/2202.03540.pdf), [code](https://github.com/asindel/SliTraNet) (pushed 2023-12-17, no licence file, so treat as unlicensed). Requires `torch >= 1.7`, `torchvision`, `decord`.
 
 Worth knowing for one structural reason, visible in `test_SliTraNet.py`: it is **two-stage, and its two classes are "slide-slide" and "slide-video" transitions.** Stage 1 (`detect_initial_slide_transition_candidates_resnet2d`, a 2-D ResNet, also runnable standalone via `test_slide_detection_2d.py`) proposes candidates; stage 2 runs a 3-D CNN over video clips to **check the slide-video candidates**. In other words, the deep-learning state of the art for this task treats *video embedded in a slide* as an explicit class to be classified — which independently confirms that hard case 3 is where the deterministic path runs out (exactly as Yang et al. concluded in 8.2 when they added an SVM).
@@ -901,6 +918,14 @@ Practical verdict for the target host: 3-D CNN clip inference over a 45-60 minut
 **Practical conclusion for spike #11: there is no public labelled slide-*transition* dataset covering the three hard cases** — the two public datasets that exist label frames, not transitions. The spike will have to hand-label its own reference videos, and the cheapest defensible way to do that is to adopt section 7's protocol verbatim — event-granularity labels typed `slide` / `build` with `parent_slide`, a declared `count_builds` policy of `collapse-ignore`, and the (coverage, duplicate-rate) metric pair — while using the `larry-xue` synthetic generator as a sanity fixture that any candidate must pass before being run on real video.
 
 ### 9.6 Where AI enters, if it enters — four systems, one answer
+
+> **Sharpened by [`reference-implementations.md`](reference-implementations.md).** The convergent
+> result below holds for the four systems in the table, but the hedge about SliTraNet being "the
+> exception" is too weak: **all three** of its networks operate on the change and none is a
+> slide-frame gate. The accurate statement is that every system which put its model at the gate did so
+> to stay cheap, and the one system that pointed models at the change itself needed three networks and
+> a GPU — and lost on recall to Gaussian-blurred frame differencing in its own Table I. See
+> [§E.1](reference-implementations.md#e1-it-does-falsify-nobody-learns-the-change).
 
 This is the clearest convergent result in the survey, and it bears directly on the map's "deterministic first, AI only if it is the only way" preference. Four independent systems across sixteen years all put a learned model in **exactly the same place — deciding whether a frame is a slide at all** — and none of them uses a model to detect the change itself:
 

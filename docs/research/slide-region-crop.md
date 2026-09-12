@@ -15,6 +15,17 @@ rather than published, it is labelled as such.
 
 ## Summary of findings
 
+> **Amended by [`reference-implementations.md`](reference-implementations.md), which read the source of
+> eleven more projects.** Finding 1 below was verified at the same commits and holds for every project
+> this document surveyed — and now holds against the learned state of the art too, which hand-labels
+> one rectangle per video in a text file. But it is **not true of the whole field**:
+> `bit-admin/AutoSlides-Extractor` ships `AutoCropDetector`, 552 lines of complete, tuned, `cv2`-only
+> slide-bbox detection — black-bar strip, Canny(20/60), dilate, 4-vertex contours, area/margin/fill
+> gates, and a score of `areaRatio × aspectScore` against 16:9 and 4:3 — plus a single-class YOLOv8.
+> Nobody had read it. It belongs above plain letterbox removal in the candidate ranking, and what it
+> lacks is the recall-first fallback: when no contour passes its five gates it returns nothing. See
+> [§B.7](reference-implementations.md#b7-auto-crop-12-is-not-greenfield).
+
 1. **The prior art does not solve this.** `vid2slides` is the only project that attempts automatic crop detection, and
    its detector reduces to "strip pixels that are near-pure-black in every slide keyframe" — a letterbox-bar remover, not
    a slide-region detector. `kovitking/video2slides` detects the webcam box well but only masks it *for hashing* and
