@@ -14,6 +14,7 @@ extract-slides fetch URL           # step 1: acquire + transcribe
 extract-slides transcribe DIR      # redo the transcript, no re-download
 extract-slides detect DIR          # redo detection; chains into crop and pair
 extract-slides crop DIR            # redo the crop only
+extract-slides crop DIR --no-crop  # keep the full frame, crop nothing
 extract-slides pair DIR            # redo the pairing, rewrite the manifest
 extract-slides drop DIR N...       # delete duplicates, renumber, rewrite
 extract-slides review DIR          # walk the flagged slides
@@ -76,6 +77,13 @@ one-shot shape forbade. The two were never really in tension: the stage pipeline
   since cropping changes pixels, not slide count or timing. Without this, a redone
   `detect` would silently leave a stale manifest pointing at slides that no longer exist.
 - **`--force` also works per stage**, so `crop DIR --force` is expressible.
+- **`--no-crop` keeps the full frame.** Available on the crop stage and on the default
+  path. It is the escape hatch for a video where cropping goes wrong, and it is always a
+  *safe* answer rather than a degraded one: ADR 0003's crop metric is binary on content
+  preservation, so the full frame always passes and only loses on the secondary measure.
+  A user who does not trust the crop on a given video should be able to say so in one flag
+  rather than reaching for `--roi`, which asks for four numbers they would have to measure.
+  Requested by the operator while reviewing the ground truth for `jqpdveK2XAU`.
 - **No `--transcript-only` / `--slides-only` flags.** With `transcribe` as a stage, they
   were a second way to reach the same result.
 - **Transcript-only is out of scope.** A caption-only mode would mostly duplicate

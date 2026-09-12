@@ -165,6 +165,23 @@ The review page asks one question per run rather than per state. That is the
 difference between 9 decisions and 88 on the same video, and it is also the first
 thing the proposed rectangle earns its keep on.
 
+## Proposing a rectangle: err outward
+
+The first rectangles this tooling proposed were **too tight**, shaved in to keep
+non-slide out of the crop. That optimises the wrong thing. ADR 0003's crop metric
+is binary on content preservation — cutting any slide content **fails outright**,
+while keeping extra only costs position on the secondary measure, which never
+declares a winner. The operator's rule, after correcting nine of them by hand:
+
+> Better to crop too much than too little. The priority is getting the slide. At
+> the limit, always capture the full frame.
+
+So a proposed rectangle should be the **generous** reading of the slide region: if
+the boundary is ambiguous, take the wider one. The corrections on `jqpdveK2XAU`
+went in exactly that direction — the top edge moved from `0.10` out to `0.007`,
+taking in the whole branding bar rather than guessing where the slide's own design
+ended.
+
 ## Reading a proposal
 
 - `dwell_s` near zero marks a **transient** — a cross-fade frame that holds

@@ -1,0 +1,129 @@
+{
+  "video": "jqpdveK2XAU",
+  "class": [
+    "C2b"
+  ],
+  "role": "fixture",
+  "duration_s": 256.3,
+  "resolution": "1280x720",
+  "required": [
+    {
+      "n": 1,
+      "windows": [
+        [
+          0.0,
+          4.0
+        ]
+      ],
+      "slide_rect": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "note": "the title card, filling the frame"
+    },
+    {
+      "n": 2,
+      "windows": [
+        [
+          5.33,
+          18.93
+        ]
+      ],
+      "slide_rect": [
+        0.0006,
+        0.0073,
+        0.6893,
+        0.7821
+      ],
+      "note": "section title on the composed layout"
+    },
+    {
+      "n": 3,
+      "windows": [
+        [
+          19.2,
+          82.13
+        ]
+      ],
+      "slide_rect": [
+        0.0006,
+        0.0073,
+        0.6893,
+        0.7821
+      ],
+      "note": "the three-bullet agenda"
+    },
+    {
+      "n": 4,
+      "windows": [
+        [
+          82.4,
+          144.0
+        ]
+      ],
+      "slide_rect": [
+        0.0006,
+        0.0073,
+        0.6893,
+        0.7821
+      ],
+      "note": "Defining Component"
+    },
+    {
+      "n": 5,
+      "windows": [
+        [
+          144.27,
+          216.27
+        ]
+      ],
+      "slide_rect": [
+        0.0006,
+        0.0073,
+        0.6893,
+        0.7821
+      ],
+      "note": "Drawing Workflow, with the diagram"
+    },
+    {
+      "n": 6,
+      "windows": [
+        [
+          216.53,
+          250.93
+        ]
+      ],
+      "slide_rect": [
+        0.0006,
+        0.0073,
+        0.6893,
+        0.7821
+      ],
+      "note": "Running Action"
+    },
+    {
+      "n": 7,
+      "windows": [
+        [
+          251.2,
+          256.3
+        ]
+      ],
+      "slide_rect": [
+        0.0006,
+        0.0073,
+        0.6893,
+        0.7821
+      ],
+      "note": "End & Thanks"
+    }
+  ],
+  "provenance": {
+    "proposed_by": "tools/groundtruth/propose.py at 4 fps, grouped by tools/groundtruth/runs.py inside the proposed rectangle",
+    "reviewed_in": "https://claude.ai/code/artifact/c720bf89-3f19-40a0-a996-fdfc191491e2",
+    "reviewed_at": "2026-09-12",
+    "note": "The proposed rectangles were too tight and were widened by hand; every composed-layout content shares one panel rectangle."
+  }
+}
