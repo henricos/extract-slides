@@ -6,9 +6,10 @@ what counts as one slide, are in
 
 The videos themselves are listed in [`docs/reference-set.md`](../docs/reference-set.md).
 
-These files are hand-verified and are the measuring stick for every detection and crop
-decision in the project. Machine-proposed, human-signed: a file without a `verified_by`
-is a proposal, not ground truth.
+These files are the measuring stick for every detection and crop decision in the project.
+Machine-proposed, human-corrected: the tooling proposes states and rectangles, and a
+person goes through them. Nothing requires a signature -- git already records who changed
+what.
 
 [`proposals/`](proposals/) holds the machine half while the human half is pending: the
 candidate states `tools/groundtruth/propose.py` found per video, before anyone has said

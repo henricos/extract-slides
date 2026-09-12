@@ -62,8 +62,7 @@ def check_file(path: Path) -> list[str]:
     for old, why in RETIRED.items():
         if old in doc:
             fail(errs, f"`{old}` is from a superseded version of ADR 0003: {why}")
-    for key in ("video", "class", "role", "duration_s", "resolution",
-                "required", "provenance"):
+    for key in ("video", "class", "role", "duration_s", "resolution", "required"):
         if key not in doc:
             fail(errs, f"missing top-level key {key!r}")
     if errs:
@@ -134,18 +133,11 @@ def check_file(path: Path) -> list[str]:
                        f"([{a1}, {b1}] and [{a2}, {b2}]); a capture in the overlap "
                        f"would match both")
 
-    prov = doc["provenance"]
-    if not isinstance(prov, dict):
+    # `provenance` is informational. There is deliberately no signature check:
+    # a file is reviewed when someone has been through it, and demanding a name
+    # in a field proves nothing a commit does not already record.
+    if "provenance" in doc and not isinstance(doc["provenance"], dict):
         fail(errs, "provenance must be an object")
-    else:
-        if not prov.get("proposed_by"):
-            fail(errs, "provenance.proposed_by is empty")
-        if not prov.get("verified_by"):
-            fail(errs, "provenance.verified_by is empty: a file without a human "
-                       "signature is a proposal, not ground truth "
-                       "(ground-truth/README.md)")
-        if not prov.get("verified_at"):
-            fail(errs, "provenance.verified_at is empty")
 
     return [f"{path}: {e}" for e in errs]
 

@@ -146,6 +146,25 @@ a working path.
 same fact: it cuts between shot types constantly, so most of what it emits is
 superseded within half a second.
 
+## From states to runs
+
+A state is a settled frame, not a slide. On a composed layout two neighbouring
+states are usually the *same slide with the speaker moved*, and on a full-frame
+screencast they are usually different slides — so nothing about adjacency settles
+it. What settles it is comparing **only inside the slide rectangle**:
+
+    runs.py <video> --rect x y w h
+
+On `jqpdveK2XAU` that turns 88 states into **9 runs**, one per distinct slide,
+because the speaker strip and the letterbox are outside the rectangle and stop
+counting. On `pJc0l2DASpo`, whose slides fill the frame, it barely groups at all
+(52 runs from 64 states) — which is correct: that fixture really does have that
+many distinct states.
+
+The review page asks one question per run rather than per state. That is the
+difference between 9 decisions and 88 on the same video, and it is also the first
+thing the proposed rectangle earns its keep on.
+
 ## Reading a proposal
 
 - `dwell_s` near zero marks a **transient** — a cross-fade frame that holds

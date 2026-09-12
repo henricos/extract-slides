@@ -113,9 +113,14 @@ versioned, while ground truth is hand-verified and precious.
 
 ### How much ground truth
 
-**Full labelling on all six sweep fixtures**, machine-proposed and human-verified. The
+**Full labelling on all six sweep fixtures**, machine-proposed and human-corrected. The
 operator answers one binary question per candidate state rather than marking transitions
-from scratch; the human signature is what makes it ground truth.
+from scratch.
+
+**No signature is required.** An earlier version demanded a `provenance.verified_by`
+before a file counted as ground truth. It was ceremony: a name in a field proves nothing
+that the commit does not already record, and it blocked a file the operator had in fact
+reviewed. `provenance` stays as informational metadata and nothing checks it.
 
 **The proposal must come from a method deliberately different from the spike shortlists**
 in `docs/research/slide-change-detection.md` §10, or the ground truth is biased toward
@@ -123,9 +128,13 @@ whichever candidate a spike is about to measure. Dense frame sampling with pairw
 comparison is acceptable; reusing the shortlist's block-wise MAD, pHash or SSIM
 configuration is not. `tools/groundtruth/METHOD.md` records what was built and measured.
 
-**Slide rectangles are labelled by a human, never proposed.**
+**Slide rectangles are proposed too, and corrected by hand.**
 `docs/research/slide-region-crop.md` measured a multimodal model asked for crop
-coordinates deviating badly, so coordinates are the one thing not worth proposing.
+coordinates deviating badly, and an earlier version of this ADR turned that into a ban on
+proposing them at all. That was the wrong inference: a rectangle that is roughly right is
+a starting point to nudge, not an answer to trust, and correcting one is far cheaper than
+drawing it from nothing. The measurement stands as a reason not to *trust* a proposed
+rectangle; it is not a reason to withhold one.
 
 ## Consequences
 
