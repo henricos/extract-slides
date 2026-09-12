@@ -1,9 +1,21 @@
 # Correctness is ranked on misses; everything else is counted, not classified
 
-- **Status:** accepted
+- **Status:** **superseded by [ADR 0004](0004-capture-generously-delete-afterwards.md)** (2026-09-12)
 - **Date:** 2026-09-12 (rewritten; see [History](#history-what-was-tried-and-dropped))
 - **Tickets:** [#9 — Correctness metric and ground-truth format](https://github.com/henricos/extract-slides/issues/9),
   [#18 — What counts as one slide, part two](https://github.com/henricos/extract-slides/issues/18)
+
+> **Superseded.** There is no ground truth and no correctness metric. The operator ended
+> this path: a metric only ever chose between detector candidates, and buying that choice
+> cost a hand-labelling pass over every candidate state of every fixture. The tool now
+> captures generously in one automatic pass and the excess is deleted in a second — see
+> [ADR 0004](0004-capture-generously-delete-afterwards.md). `ground-truth/` and
+> `tools/groundtruth/` were deleted with that decision.
+>
+> **This document is kept as the record of what was tried**, because it is the third
+> version of the same idea and its own [History](#history-what-was-tried-and-dropped)
+> section explains why the first two were dropped. That trail is the reason not to rebuild
+> any of them. Nothing below is in force.
 
 ## Decision
 

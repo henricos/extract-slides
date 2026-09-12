@@ -1,9 +1,14 @@
 # The reference set
 
-Every detection and crop decision in this project is settled by measurement, and
-measurement needs a fixed, small set of real videos spanning the difficulty classes.
-This is that set. It was assembled for
+A fixed, small set of real videos spanning the difficulty classes, assembled for
 [issue #4](https://github.com/henricos/extract-slides/issues/4).
+
+**These are videos to watch the tool against, not a measured benchmark.**
+[ADR 0004](adr/0004-capture-generously-delete-afterwards.md) ended the ground-truth and
+correctness-metric path: nothing is scored against these, and the way to know a stage is
+not losing captures is to watch one of them and compare it with the output. They were
+chosen to span the cases that break naive detectors, and that is exactly what still makes
+them worth having.
 
 The method that found it, and the rules for finding more, are in
 [`tools/candidates/CALIBRATION.md`](../tools/candidates/CALIBRATION.md) and
@@ -83,7 +88,7 @@ Run once, at the end, to confirm the result is actually useful. Not swept.
 | Target corpus | `VGN22pPpb-8` | 11m06 | 1080p60 | 21 `-orig` tracks (see below). |
 | Target corpus | `Sir59K8ZDPU` | 21m18 | 1080p60 | 21 `-orig` tracks. |
 | Target corpus | `VH9uBxLJx30` | 83m59 | 1080p25 | The long one. Excluded from sweeps on cost. |
-| `C1` + `C3`, accessible subject | `N7bb3iUp1aI` | 24m57 | 480p30 | Pathology webinar. Clean full-frame medical deck with clear bullet-and-image builds, on a subject a non-specialist labeller can follow — which is what the ground-truth labelling in [#10](https://github.com/henricos/extract-slides/issues/10) needs. |
+| `C1` + `C3`, accessible subject | `N7bb3iUp1aI` | 24m57 | 480p30 | Pathology webinar. Clean full-frame medical deck with clear bullet-and-image builds, on a subject a non-specialist can follow, which is what makes it usable for checking the output by eye. |
 
 **Total 158m10.** The five target-corpus videos are the operator's real material, chosen
 for subject, not as difficulty fixtures. Those two jobs conflict, so each row above says

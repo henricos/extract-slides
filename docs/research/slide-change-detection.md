@@ -1,5 +1,14 @@
 # Slide-change detection techniques
 
+> **Read under [ADR 0004](../adr/0004-capture-generously-delete-afterwards.md).** This
+> document was written while the project still planned to rank candidates against a
+> hand-labelled ground truth. That path was ended: the tool now captures generously in one
+> automatic pass and the excess is deleted in a second, and there is no metric. **The facts
+> and citations below stand; the verdicts that read as "measure this against that" should be
+> read as "this is the technique, tune it toward over-capture".** Wherever a passage weighs
+> candidates by misses and surplus, the ranking no longer happens — but the reason a
+> technique loses captures is exactly what still matters.
+
 Research for issue [#7](https://github.com/henricos/extract-slides/issues/7), gathered September 2026. **Facts only** — the choice between candidates belongs to the detection spike ([#11](https://github.com/henricos/extract-slides/issues/11)), which will measure them against a ground-truth-labelled reference video set.
 
 `docs/similar-tools.md` already catalogues *which* tools exist. This document does not repeat that. It answers *how each technique behaves* on the three cases that break naive detectors, what knobs exist with their documented defaults, and what each costs on the target host (Intel i3-4170, 2 cores / 4 threads, no GPU, 15 GB RAM, 45–60 minute 1080p input).

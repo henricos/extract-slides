@@ -1,5 +1,14 @@
 # What the reference implementations actually do
 
+> **Read under [ADR 0004](../adr/0004-capture-generously-delete-afterwards.md).** This
+> document was written while the project still planned to rank candidates against a
+> hand-labelled ground truth. That path was ended: the tool now captures generously in one
+> automatic pass and the excess is deleted in a second, and there is no metric. **The facts
+> and citations below stand; the verdicts that read as "measure this against that" should be
+> read as "this is the technique, tune it toward over-capture".** Wherever a passage weighs
+> candidates by misses and surplus, the ranking no longer happens — but the reason a
+> technique loses captures is exactly what still matters.
+
 Research for [issue #19](https://github.com/henricos/extract-slides/issues/19), gathered September 2026.
 **Facts and citations only** — the choices belong to the spikes it feeds:
 [#11](https://github.com/henricos/extract-slides/issues/11) (detection and dedupe),

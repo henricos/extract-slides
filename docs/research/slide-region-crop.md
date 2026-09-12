@@ -1,5 +1,14 @@
 # Slide-region isolation and webcam overlay handling
 
+> **Read under [ADR 0004](../adr/0004-capture-generously-delete-afterwards.md).** This
+> document was written while the project still planned to rank candidates against a
+> hand-labelled ground truth. That path was ended: the tool now captures generously in one
+> automatic pass and the excess is deleted in a second, and there is no metric. **The facts
+> and citations below stand; the verdicts that read as "measure this against that" should be
+> read as "this is the technique, tune it toward over-capture".** Wherever a passage weighs
+> candidates by misses and surplus, the ranking no longer happens — but the reason a
+> technique loses captures is exactly what still matters.
+
 Research for [issue #8](https://github.com/henricos/extract-slides/issues/8). Facts and citations only — the choice
 between the candidates below is made by the crop spike ([issue #12](https://github.com/henricos/extract-slides/issues/12)),
 measured against the reference set.

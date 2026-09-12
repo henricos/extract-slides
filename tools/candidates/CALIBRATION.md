@@ -10,7 +10,7 @@ Restrict to subjects where people normally present slides AND where a non-specia
 can tell whether the output is wrong: **technology, education, health, culture and
 customs, business**. Avoid highly specialised research vocabulary.
 
-The reason is not taste. The set is ground-truth labelled by a human (issue #10) and
+The reason is not taste. The set is checked by a human against the tool's output, and
 its transcript is judged for quality. If the subject is obscure, the labeller cannot
 see when something is wrong, so the validation loses its weight, and the transcript's
 error profile stops being representative.
@@ -40,7 +40,7 @@ volunteer it. Make `LEGIBLE / ILLEGIBLE` a required field. Typical causes: a pro
 screen blown out by stage lighting (`Z-PA3Pohp7Q`, `CRQSrIWX81k`), slide rendered too
 small inside a composed layout (`l8xiNOCIdLY`, `VTxJbUPhRJw`).
 
-An illegible slide cannot be ground-truth labelled, so it measures nothing.
+An illegible slide cannot be checked by eye, so it proves nothing.
 
 ## Reject: meta-content about presenting
 
@@ -92,7 +92,7 @@ one long fixture per accessible-subject class rather than trying to find a short
 
 ## Where the subject rule actually binds
 
-Accessible vocabulary matters where **a human judges content**: ground-truth labelling
+Accessible vocabulary matters where **a human judges content**: checking the output
 of which slides are distinct (issue #10) and judging transcript quality. It matters
 much less for a pure false-positive count — "did the detector emit forty slides for
 one slide with a video playing?" needs no understanding of the content. So an obscure

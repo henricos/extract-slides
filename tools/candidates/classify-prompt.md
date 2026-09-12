@@ -46,7 +46,7 @@ frames must show a slide being *presented*, never one being *authored*.
 Two required extra fields:
 - `LEGIBLE` or `ILLEGIBLE` — is the slide TEXT actually readable in the frames, or is it
   washed out by stage lighting, rendered too small inside a composed layout, out of focus,
-  or blocked? An illegible slide cannot be ground-truth labelled, so it measures nothing.
+  or blocked? An illegible slide cannot be checked by eye, so it proves nothing.
 - `BUILD` — write `BUILD` if you can see the same slide gaining elements between adjacent
   frames in one sheet, otherwise `-`.
 

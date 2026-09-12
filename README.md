@@ -19,6 +19,8 @@ What the tool is meant to do, in order:
 2. **Get one screenshot per slide** — detect when a new slide appears over the course of the video, and capture it.
 3. **Crop each screenshot to the slide region** — when the slide doesn't fill the whole frame, isolate just that region (the part that actually matters).
 
+Step 2 runs in **two passes**, and only the first is automatic: it captures generously and deliberately leaves too much, then the excess is deleted afterwards — by hand, or by an AI pass over the captured images. Losing a slide is the only failure that costs anything; a duplicate costs one deletion. See [ADR 0004](docs/adr/0004-capture-generously-delete-afterwards.md).
+
 ## Explicitly out of scope
 
 - **Reconstructing an editable original file** (e.g. rebuilding a `.pptx`/`.key` from the screenshots). The output is the transcript plus the slide images — not a re-editable deck.
@@ -32,12 +34,13 @@ hard decision.
 
 - [`docs/idea.md`](docs/idea.md) — the idea and requirements.
 - [`docs/adr/`](docs/adr/) — the decisions taken, and why. Start with
+  [0004, the two passes](docs/adr/0004-capture-generously-delete-afterwards.md) and
   [0002, the CLI surface](docs/adr/0002-cli-surface.md).
 - [`docs/research/`](docs/research/) — primary-source research behind the decisions:
   caption acquisition, CPU-only speech-to-text, slide-change detection, slide-region
-  cropping.
-- [`docs/reference-set.md`](docs/reference-set.md) — the fixed set of real videos every
-  detection and crop decision is measured against, and
+  cropping, and what twelve reference implementations actually do in their source.
+- [`docs/reference-set.md`](docs/reference-set.md) — the fixed set of real videos the tool
+  is watched against, spanning the cases that break naive detectors, and
   [`docs/reference-set-method.md`](docs/reference-set-method.md) for how to find more.
 - [`docs/similar-tools.md`](docs/similar-tools.md) — prior-art scan.
 
