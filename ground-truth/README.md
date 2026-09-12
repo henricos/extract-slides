@@ -11,6 +11,6 @@ decision in the project. Machine-proposed, human-signed: a file without a `verif
 is a proposal, not ground truth.
 
 [`proposals/`](proposals/) holds the machine half while the human half is pending: the
-candidate states `tools/groundtruth/propose.py` found per video, which are not yet
-grouped into expected slides. [`tools/groundtruth/validate.py`](../tools/groundtruth/validate.py)
+candidate states `tools/groundtruth/propose.py` found per video, before anyone has said
+which of them carry content that must not be missed. [`tools/groundtruth/validate.py`](../tools/groundtruth/validate.py)
 checks a finished file against the schema.

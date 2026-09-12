@@ -22,10 +22,14 @@ ground truth toward whichever spike candidate uses it. What the ADR does bless i
 | comparison | consecutive, or last-kept frame | against the **last emitted state**, over **jointly still pixels** |
 | decision | one threshold declares a slide | nothing here declares a slide; a human groups the states |
 
-The last row is the important one. `propose.py` does not implement the
-accumulation rule and has no opinion on what one slide is. It emits *states* —
-visually distinct, settled frames — with deliberately high recall, and the
-accumulation rule is applied by eye afterwards.
+The last row is the important one. `propose.py` has no opinion on what a slide
+is. It emits *states* — visually distinct, settled frames — with deliberately
+high recall, and the human answers one binary question per state afterwards:
+**would I be unhappy if the output never showed this?** A yes makes it a required
+content; everything else is surplus, which the metric counts and never
+classifies ([ADR 0003](../../docs/adr/0003-correctness-metric-and-ground-truth.md)).
+That is why the tool survived two rewrites of the metric untouched: it proposes
+where to look, never what to conclude.
 
 ## The signal
 
