@@ -1139,10 +1139,26 @@ the AI options are deliberately not in the list, because the only measured data 
 Union-over-slide-frames near-black mask → largest contour → `boundingRect`; equivalently
 `ffmpeg cropdetect` consumed via `lavfi.cropdetect.*` frame metadata. `vid2slides`' actual behaviour, made explicit.
 
+> **Falsified by the crop spike ([ADR 0006](../adr/0006-crop-by-cutting-the-presenter-away.md)).**
+> "Recall-safe by construction" is wrong, and the phrase hides the assumption that does the work:
+> that a slide is never near-black at its own edge. On `YBH8rQv4aTQ` — white text on near-black
+> slides — the inward walk hit its 10 % cap on all four sides of **77 of 78 images** and cut content
+> out of four of them. A letterbox bar and a dark slide's margin are the same pixels, and a
+> mean-brightness test cannot tell them apart. The step is not in the shipped chain.
+
 Why first: it is the only case the prior art solves, it is cheap, it can only ever remove uniformly black margins, and it
 is therefore **recall-safe by construction**. It also sets the floor: any candidate that does not beat this is not worth
 its complexity. Measure both the OpenCV and the `cropdetect` implementations — the map notes `ffmpeg` is not installed on
 the target host, so whether this stage needs it at all is a real question.
+
+> **This is the one that won ([ADR 0006](../adr/0006-crop-by-cutting-the-presenter-away.md)),
+> though not in the shape described below.** The activity mask is right and the "crop to the
+> complement" idea is right. Two things in this section's framing were not: the mask is built from
+> *how often* a pixel moves rather than a median of differences, and the crop does **not** reduce
+> to the complement's bounding box. Cropping to where the content is slices the title off any deck
+> whose header repeats, because static slide furniture is invisible to every temporal signal. The
+> rectangle starts at the full frame and only loses a side when a whole blob of continuous movement
+> lies in the strip beyond the content.
 
 ### Rank 2 — Activity-complement crop (median-of-differences)
 
@@ -1206,6 +1222,13 @@ map already requires ("automatic by default, with an optional review mode"), not
 - **VLM asked for crop coordinates** — the only measured evidence available is negative (`sumerene`).
 
 ### Fallback chain when detection fails
+
+> **Superseded by [ADR 0006](../adr/0006-crop-by-cutting-the-presenter-away.md): the shipped chain
+> has two steps, not four.** The activity rectangle, then the full frame. Step 1's union is
+> incoherent for a candidate that sits *inside* the de-letterboxed frame (unioning them gives the
+> letterbox rectangle back, so the crop does nothing), and steps 2–3 are the black-bar step this
+> note's §9 Rank 1 wrongly called recall-safe. The aspect-ratio acceptance gate below was also
+> dropped: it is the gate that picked the speaker's webcam tile out of a composed layout.
 
 Recall-first, so every step falls back to *more* pixels, never fewer:
 

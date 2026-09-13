@@ -303,7 +303,8 @@ exactly one row for its decode cost ([§B.3](#b3-frame-sampling)).
 ### #12 — crop
 
 **Re-scope from greenfield to "one tuned deterministic recipe exists, and it has no fallback".**
-`AutoCropDetector` is candidate 1.5, above plain letterbox removal, and its aspect-prior scoring is
+**Reversed — see the note at [§B.7](#b7-auto-crop-12-is-not-greenfield); the aspect prior picks the
+webcam.** `AutoCropDetector` is candidate 1.5, above plain letterbox removal, and its aspect-prior scoring is
 the part this project did not plan for. Its limitation is the one recall-first must fix: five gates
 and no fall-back rectangle ([§B.7](#b7-auto-crop-12-is-not-greenfield)). Everything else in the
 survey still confirms the original premise, now including the learned state of the art, which
@@ -1375,6 +1376,18 @@ Tuned constants, [`configmanager.h#L23-L42`](https://github.com/bit-admin/AutoSl
 | `marginFrac` | `0.02` | require ≥2 % margin top **or** bottom |
 | `fillRatioMin` | `0.85` | contour must fill 85 % of its bounding box |
 | `SUPPORTED_ASPECTS` | `{16/9, 4/3}` | hardcoded, [`autocropdetector.cpp#L20`](https://github.com/bit-admin/AutoSlides-Extractor/blob/e0899cdc643937e06fb4e45220a18ffd8de10639/src/autocropdetector.cpp#L20) |
+
+> **Reversed by the crop spike ([ADR 0006](../adr/0006-crop-by-cutting-the-presenter-away.md)).**
+> Reimplemented at these exact constants and run on this project's fixtures, it fails on the two
+> the crop stage exists for. On `jqpdveK2XAU` it returns **nothing on all 19 captures** — the
+> dilated edge map merges the slide's border with its own text and with the surrounding chrome, so
+> no contour survives the four-vertex and 0.85-fill gates. On `b9dBJnQ_kpo` it returns something
+> worse: its top-scoring rectangle is `(12, 273, 940, 532)`, four vertices, fill 1.00, aspect
+> **1.77** — the **speaker's video panel**. The aspect prior singled out below as "a strong, cheap
+> prior" is precisely what prefers it: in a composed layout the webcam feed is a cleaner 16:9
+> rectangle than the slide is. Had this shipped, the crop would have kept the presenter and thrown
+> the slide away. This is `sumerene`'s documented negative result, now reproduced first-hand
+> against the best implementation of that family in the field.
 
 **Verdict — adopt as #12 candidate 1.5, above plain letterbox removal.** This is `cv2`-only, deterministic, ~80 lines in Python, and it is a *superset* of our black-bar candidate. The aspect-prior scoring in particular is the piece we do not currently have planned: "of all rectangles, prefer the large one whose aspect is closest to a real slide" is a strong, cheap prior. The `fillRatioMin` and margin gates are the kind of thing that only gets added after a rectangle detector returns garbage in the field.
 
