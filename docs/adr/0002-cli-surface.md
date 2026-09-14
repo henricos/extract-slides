@@ -20,6 +20,9 @@ extract-slides drop DIR N...       # delete duplicates, renumber, rewrite
 extract-slides review DIR          # walk the flagged slides
 ```
 
+The last two lines were revised on 2026-09-14 — `review` is removed, `drop` also runs with
+no numbers, and `prune` joins them. See the amendment at the end.
+
 Stages: `acquire → transcribe → detect → crop → pair`.
 
 Output directory, per video:
@@ -116,9 +119,33 @@ one-shot shape forbade. The two were never really in tension: the stage pipeline
 - The manifest schema, and the rule that decides which speech belongs to which slide
   ([#14](https://github.com/henricos/extract-slides/issues/14)). This ADR fixes only that
   a manifest and a `presentation.md` exist and what they are for.
-- What `review` actually renders — a prompt loop, a contact sheet, an HTML gallery. Still
-  fog on the map; this ADR fixes only that it is a command taking a directory.
+- ~~What `review` actually renders — a prompt loop, a contact sheet, an HTML gallery. Still
+  fog on the map; this ADR fixes only that it is a command taking a directory.~~ Answered
+  by removing the command — see the amendment below.
 - Which detection metric or crop method runs
   ([#11](https://github.com/henricos/extract-slides/issues/11),
   [#12](https://github.com/henricos/extract-slides/issues/12),
   [#17](https://github.com/henricos/extract-slides/issues/17)).
+
+## Amendments
+
+### 2026-09-14 — `review` is removed; `drop` reconciles; `prune` is added
+
+From [#21](https://github.com/henricos/extract-slides/issues/21), settling the deletion
+pass. See [ADR 0008](0008-the-deletion-pass-two-ways-to-name-the-surplus.md) for the
+reasoning. The surface above changes in three places.
+
+**`review DIR` is gone.** It was listed as "walk the flagged slides", with what it renders
+left open. The answer turned out to be that the tool renders nothing: the operator reviews
+`slides/` in a file manager, which is already a contact sheet and already has a delete key.
+A command whose whole job was a rendering does not survive the decision not to render.
+
+**`drop DIR` without numbers is now meaningful.** It reconciles the output with whatever is
+on disk, which is what the operator needs after deleting images in the file manager.
+`drop DIR N...` is the same procedure with a deletion in front of it. Both renumber the
+survivors and print the old-to-new mapping — this ADR already established that slide
+numbers are not stable identities, and the mapping is what keeps a second review round from
+working off numbers that moved.
+
+**`prune DIR` is added**, with `--apply`. It is the third way of producing the list of
+numbers, by asking a model instead of a person. It never fires implicitly.
