@@ -56,6 +56,6 @@ Two possible paths, depending on how heavy the tool ends up being:
 
 ## Open questions
 
-- Exact slide-change detection strategy (frame differencing, OCR-based, content-change detection, timestamp-based).
-- Exact slide-region cropping strategy (edge/rectangle detection of the slide frame, tracking across the video).
-- Final output shape: paired (slide, corresponding transcript excerpt) records, or two separate artifacts (all screenshots + a single transcript file).
+- ~~Exact slide-change detection strategy (frame differencing, OCR-based, content-change detection, timestamp-based).~~ Settled by [ADR 0005](adr/0005-pass-1-pinned-anchor-edge-signal-watchdog.md): an edge difference against a pinned anchor, with a watchdog.
+- ~~Exact slide-region cropping strategy (edge/rectangle detection of the slide frame, tracking across the video).~~ Settled by [ADR 0006](adr/0006-crop-by-cutting-the-presenter-away.md): the crop never looks for the slide, it removes what the presenter occupies.
+- ~~Final output shape: paired (slide, corresponding transcript excerpt) records, or two separate artifacts (all screenshots + a single transcript file).~~ Settled by [ADR 0009](adr/0009-the-output-contract-a-table-of-instants.md): both, and neither is stored as a pairing. The manifest carries one instant per slide, the transcript stands on its own, and the paired view is cut from the two when it is written.

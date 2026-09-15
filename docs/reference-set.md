@@ -113,6 +113,20 @@ This is YouTube multi-language audio — each dubbed audio track gets its own AS
 video, and the choice has to be driven by the video's audio language rather than by the
 suffix. This lands on [#14](https://github.com/henricos/extract-slides/issues/14).
 
+### It did not reproduce, five days later
+
+**Re-measured 2026-09-15**, same host and the same `yt-dlp` 2026.07.04: both videos now
+carry **one** `-orig` track (`en-orig`) out of 157 automatic captions, no manual track, a
+top-level `language` of `en`, and a single audio format marked `en-US` /
+*"English (US) original (default)"*. Either YouTube withdrew the dubbing from these two, or
+the reading above came from a different extractor client.
+
+The observation is kept because it may well come back, and because of what looking again
+exposed: **`yt-dlp` states which audio track is the original**, at the top level and on the
+format. That is a handle `docs/research/youtube-captions.md` never used, and it is what
+[ADR 0009](adr/0009-the-output-contract-a-table-of-instants.md) selects on — with local STT
+as the fall-through when it is absent or ambiguous.
+
 ## Rejected candidates worth remembering
 
 | id | Why rejected |

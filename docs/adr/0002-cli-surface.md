@@ -21,7 +21,9 @@ extract-slides review DIR          # walk the flagged slides
 ```
 
 The last two lines were revised on 2026-09-14 — `review` is removed, `drop` also runs with
-no numbers, and `prune` joins them. See the amendment at the end.
+no numbers, and `prune` joins them. The `pair` line was revised on 2026-09-15 — it reads the
+manifest rather than rewriting it, and `crop` now chains into it. Both revisions are in the
+amendments at the end.
 
 Stages: `acquire → transcribe → detect → crop → pair`.
 
@@ -29,12 +31,14 @@ Output directory, per video:
 
 ```
 <slug>-<video-id>/
-  manifest.json      machine contract (schema: issue #14)
+  manifest.json      machine contract (schema: ADR 0009)
   presentation.md    each slide's image + only the speech said over it
   transcript.md      the whole video, one document
   transcript.json
-  slides/001.png …
+  slides/001.jpg …
 ```
+
+The extension was `.png` until 2026-09-15; see the amendment at the end.
 
 ## Why
 
@@ -79,6 +83,7 @@ one-shot shape forbade. The two were never really in tension: the stage pipeline
   `crop` and `pair`; `transcribe` re-runs `pair`; `crop` and `pair` stop at themselves,
   since cropping changes pixels, not slide count or timing. Without this, a redone
   `detect` would silently leave a stale manifest pointing at slides that no longer exist.
+  **`crop` no longer stops at itself** — see the amendment at the end.
 - **`--force` also works per stage**, so `crop DIR --force` is expressible.
 - **`--no-crop` keeps the full frame.** Available on the crop stage and on the default
   path. It is the escape hatch for a video where cropping goes wrong, and it is always a
@@ -102,7 +107,9 @@ one-shot shape forbade. The two were never really in tension: the stage pipeline
   force `drop` to renumber two series in step and admit stale orphans.
 - **Slide numbers are not stable identities.** `drop` renumbers survivors, so number 7
   before a drop is not number 7 after. Whether the manifest also carries a stable id is
-  [#14](https://github.com/henricos/extract-slides/issues/14).
+  [#14](https://github.com/henricos/extract-slides/issues/14). **Answered:**
+  [ADR 0009](0009-the-output-contract-a-table-of-instants.md) makes the capture's own
+  timestamp the identity.
 - **Two output streams under `--report json`**: the JSON document on stdout, all human
   narration on stderr, and a machine-readable object on failure with exit 2. The mock's
   first version printed progress to stdout and corrupted the JSON, which made the
@@ -116,9 +123,10 @@ one-shot shape forbade. The two were never really in tension: the stage pipeline
 
 ## What this decision does not decide
 
-- The manifest schema, and the rule that decides which speech belongs to which slide
+- ~~The manifest schema, and the rule that decides which speech belongs to which slide
   ([#14](https://github.com/henricos/extract-slides/issues/14)). This ADR fixes only that
-  a manifest and a `presentation.md` exist and what they are for.
+  a manifest and a `presentation.md` exist and what they are for.~~ Settled by
+  [ADR 0009](0009-the-output-contract-a-table-of-instants.md).
 - ~~What `review` actually renders — a prompt loop, a contact sheet, an HTML gallery. Still
   fog on the map; this ADR fixes only that it is a command taking a directory.~~ Answered
   by removing the command — see the amendment below.
@@ -149,3 +157,25 @@ working off numbers that moved.
 
 **`prune DIR` is added**, with `--apply`. It is the third way of producing the list of
 numbers, by asking a model instead of a person. It never fires implicitly.
+
+### 2026-09-15 — JPEG, `pair` reads the manifest, `crop` chains forward
+
+From [#14](https://github.com/henricos/extract-slides/issues/14), settling the output
+contract. See [ADR 0009](0009-the-output-contract-a-table-of-instants.md) for the
+reasoning. Three corrections.
+
+**The images are JPEG, not PNG.** The output layout above wrote `slides/001.png`; all three
+spikes emitted `.jpg` and nobody reviewing the results noticed. Measured on 36 cropped
+captures, PNG costs 986 KB an image against JPEG's 143 KB — 202 MB against 29 MB for a
+45-minute talk — to losslessly preserve the artefacts of a lossily compressed video frame.
+
+**`pair DIR` reads the manifest rather than rewriting it.** It is listed above as "redo the
+pairing, rewrite the manifest". [ADR 0009](0009-the-output-contract-a-table-of-instants.md)
+stores an instant per slide and derives every interval at read time, so there is no stored
+assignment to redo. What is left is regenerating `presentation.md`, which is the command to
+run after editing the transcript by hand. Unlike `review`, it keeps a job worth a name.
+
+**`crop DIR` chains forward into `pair`.** The consequence above has it stopping at itself,
+"since cropping changes pixels, not slide count or timing". That premise died with
+[ADR 0006](0006-crop-by-cutting-the-presenter-away.md), which runs the duplicate test a
+second time inside the crop stage and deletes — 241 images to 216 across the sweep set.
