@@ -1,0 +1,7 @@
+=== n=216 max_tokens=65536 reasoning_effort=low ===
+model=google/gemini-3.8-flash  images=216  long_edge=680px  jpeg=6.23 MB  base64~8.30 MB
+ACCEPTED in 172.1s
+  usage: completion_tokens=26793 prompt_tokens=237334 total_tokens=264127 completion_tokens_details=ChatUsageCompletionTokensDetails(accepted_prediction_tokens=Unset(), audio_tokens=0, reasoning_tokens=26318, rejected_prediction_tokens=Unset()) cost=0.27847425 cost_details=CostDetails(upstream_inference_completions_cost=0.10047375, upstream_inference_prompt_cost=0.1780005, server_tool_cost=Unset(), upstream_inference_cost=0.27847425) is_byok=False prompt_tokens_details=ChatUsagePromptTokensDetails(audio_tokens=0, cache_write_tokens=0, cached_tokens=0, video_tokens=0) server_tool_use_details=Unset()
+  finish_reason: stop
+  reply[:600]: 6, 15, 16, 18, 19, 20, 22, 23, 24, 26, 27, 29, 30, 31, 32, 33, 35, 36, 38, 42, 43, 50, 54, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 71, 74, 75, 76, 78, 79, 80, 81, 84, 86, 87, 90, 91, 94, 95, 96, 98, 101, 102, 105, 106, 107, 108, 109, 111, 113, 114, 116, 117, 119, 120, 121, 122, 126, 133, 134, 136, 137, 138, 139, 142, 143, 144, 146, 153, 157, 163, 167, 172, 174, 175, 176, 177, 178, 179, 181, 183, 187, 188, 190, 191, 192, 193, 195, 200, 202, 203, 204, 205, 206, 207
+EXIT=0

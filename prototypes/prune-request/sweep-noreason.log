@@ -1,0 +1,27 @@
+=== n=25 (no reasoning) ===
+model=google/gemini-3.8-flash  images=25  long_edge=680px  jpeg=0.97 MB  base64~1.30 MB
+ACCEPTED in 59.0s
+  usage: completion_tokens=8307 prompt_tokens=27564 total_tokens=35871 completion_tokens_details=ChatUsageCompletionTokensDetails(accepted_prediction_tokens=Unset(), audio_tokens=0, reasoning_tokens=8274, rejected_prediction_tokens=Unset()) cost=0.05182425 cost_details=CostDetails(upstream_inference_completions_cost=0.03115125, upstream_inference_prompt_cost=0.020673, server_tool_cost=Unset(), upstream_inference_cost=0.05182425) is_byok=False prompt_tokens_details=ChatUsagePromptTokensDetails(audio_tokens=0, cache_write_tokens=0, cached_tokens=0, video_tokens=0) server_tool_use_details=Unset()
+  finish_reason: stop
+  reply[:600]: 6, 15, 16, 18, 19, 20, 22, 23, 24
+=== n=50 (no reasoning) ===
+model=google/gemini-3.8-flash  images=50  long_edge=680px  jpeg=1.77 MB  base64~2.37 MB
+ACCEPTED in 88.8s
+  usage: completion_tokens=13166 prompt_tokens=55064 total_tokens=68230 completion_tokens_details=ChatUsageCompletionTokensDetails(accepted_prediction_tokens=Unset(), audio_tokens=0, reasoning_tokens=13085, rejected_prediction_tokens=Unset()) cost=0.0906705 cost_details=CostDetails(upstream_inference_completions_cost=0.0493725, upstream_inference_prompt_cost=0.041298, server_tool_cost=Unset(), upstream_inference_cost=0.0906705) is_byok=False prompt_tokens_details=ChatUsagePromptTokensDetails(audio_tokens=0, cache_write_tokens=0, cached_tokens=0, video_tokens=0) server_tool_use_details=Unset()
+  finish_reason: stop
+  reply[:600]: 6, 15, 16, 18, 19, 20, 22, 23, 24, 26, 27, 29, 30, 31, 32, 33, 35, 36, 38, 42, 43
+=== n=100 (no reasoning) ===
+model=google/gemini-3.8-flash  images=100  long_edge=680px  jpeg=3.31 MB  base64~4.42 MB
+ACCEPTED in 112.1s
+  usage: completion_tokens=15996 prompt_tokens=110064 total_tokens=126060 completion_tokens_details=ChatUsageCompletionTokensDetails(accepted_prediction_tokens=Unset(), audio_tokens=0, reasoning_tokens=15359, rejected_prediction_tokens=Unset()) cost=0.142533 cost_details=CostDetails(upstream_inference_completions_cost=0.059985, upstream_inference_prompt_cost=0.082548, server_tool_cost=Unset(), upstream_inference_cost=0.142533) is_byok=False prompt_tokens_details=ChatUsagePromptTokensDetails(audio_tokens=0, cache_write_tokens=0, cached_tokens=0, video_tokens=0) server_tool_use_details=Unset()
+  finish_reason: length
+  reply[:600]: TU Delft title slide (dark). Not duplicated. Keep.
+Slide 2: Gaussian Splatting (bike & church). Keep.
+Slide 3: Gaussian Splatting (500 M Gaussians). Keep.
+Slide 4: Gaussian Splatting - Overview (Stage, Depth Sort, Fragment, Assign, Rasterize). Keep.
+Slide 5: Scaling Problem - Sorting. Keep.
+Slide 6: Scaling Problem - Tile-based rasterizer (no cross). Delete (7 captures it).
+Slide 7: Scaling Problem - Tile-based rasterizer (with crosses). Keep.
+Slide 8: Order Independent Stochastic Transparency (noisy). Keep.
+Slide 9: Order Independent Stochastic Transparency (converged). Keep.
+Slide 10: Stocha
