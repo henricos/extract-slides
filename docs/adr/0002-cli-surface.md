@@ -179,3 +179,30 @@ run after editing the transcript by hand. Unlike `review`, it keeps a job worth 
 "since cropping changes pixels, not slide count or timing". That premise died with
 [ADR 0006](0006-crop-by-cutting-the-presenter-away.md), which runs the duplicate test a
 second time inside the crop stage and deletes — 241 images to 216 across the sweep set.
+
+### 2026-09-16 — two non-stage commands: `prepare` and `self-update`
+
+From [#15](https://github.com/henricos/extract-slides/issues/15), settling installation and
+distribution. See [ADR 0010](0010-installed-like-a-system-tool.md) for the reasoning. The
+surface above is a stage pipeline and lists only stages; packaging adds two commands that
+are not stages and do not touch an output directory.
+
+```
+extract-slides prepare               # download the STT model now instead of on first use
+extract-slides self-update           # update the tool and its dependencies
+extract-slides self-update --yt-dlp  # update only yt-dlp, leaving the rest pinned
+```
+
+**`prepare`** exists because the 464 MB model otherwise downloads during the first real run,
+which looks like a hang. Lazy download stays the default — it is what a person gets without
+reading anything — and `prepare` lets an unattended install pull the wait forward to install
+time, where it is expected.
+
+**`self-update`** exists because the tool is installed like `yt-dlp` and inherits `yt-dlp`'s
+problem: every pinned dependency must stay pinned, and that one must not. `--yt-dlp` updates
+it alone, because "YouTube changed again" is the common case and should not re-resolve the
+stack that the spikes measured.
+
+Neither command takes a URL or a directory, so neither disturbs the verbless default path:
+`prepare` and `self-update` are not plausible filenames, and the ambiguity this ADR worried
+about does not arise.

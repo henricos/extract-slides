@@ -47,12 +47,16 @@ If the core pipeline can be built with existing tools alone (no LLM required for
 - **Summarizing per slide** — condensing only the speech that was said while that specific slide was on screen.
 - For both summarization modes, **filtering out speech that isn't part of the presentation itself** (side comments, audience questions, banter) before summarizing.
 
-## Deployment shape (open — to be decided later)
+## Deployment shape
 
-Two possible paths, depending on how heavy the tool ends up being:
+~~Open — to be decided later.~~ **Settled by [ADR 0010](adr/0010-installed-like-a-system-tool.md): the light path.** The tool is a classic system CLI, installed on the server in one line with no root and no system dependencies, and invoked like any other command. Nothing runs as a service, and there is no API or MCP interface of its own; the skill that would call it is deliberately [out of scope](https://github.com/henricos/extract-slides/issues/1).
+
+The two paths that were on the table:
 
 - **Light** — trigger via a skill that calls a script running on the Hermes server itself. Input: a URL. Output: the result, produced locally.
 - **Heavy** — a dedicated application running on the main server, with its own API/MCP interface to trigger the process from the outside.
+
+The heavy path was never forced: the whole dependency chain installs wheels-only, with no compilation and no system package, so there was nothing for a service wrapper to solve.
 
 ## Open questions
 

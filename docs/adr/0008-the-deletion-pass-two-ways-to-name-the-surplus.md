@@ -143,3 +143,32 @@ while settling the merge direction: where a slide recurs several times, the fina
 occurrence is not necessarily the one worth keeping. Judged rare enough to ignore, and
 recorded here rather than designed around. If review keeps hitting it, the merge rule and
 [ADR 0006](0006-crop-by-cutting-the-presenter-away.md)'s "later survives" are where to look.
+
+## Amendments
+
+### 2026-09-16 — the request goes through OpenRouter, and the single-request premise is now unverified
+
+From [#15](https://github.com/henricos/extract-slides/issues/15), settling packaging. See
+[ADR 0010](0010-installed-like-a-system-tool.md).
+
+**The route changed.** This ADR assumed the call was made against Anthropic's API. The
+operator chose **OpenRouter**, reached with the official `openrouter` SDK — 13 packages,
+17 MB, and the smallest of the eight client libraries measured. The model is unchanged:
+`anthropic/claude-opus-5`, served there at 1M context with image input.
+
+**The cost survives.** OpenRouter prices that model at $5 per million input tokens, the same
+figure behind the $0.37 per talk measured above, plus their platform fee on credit
+purchases. The 680 px decision is untouched.
+
+**One thing does not survive intact.** "Why one request and not an agent" rests on limits
+read from Anthropic's API directly — 600 images per request on 1M-context models and a 32 MB
+request ceiling. OpenRouter documents neither, says explicitly that such limits vary by
+provider and model, and has been observed returning `too many images and documents:
+27 + 0 > 20`. If a ceiling of that order applies on this route, the ~210 images become
+roughly a dozen requests, and the property being bought — the model seeing the whole talk at
+once, since "do these carry the same content" depends on the neighbours — is what would be
+lost, not merely the request count.
+
+The reasoning for *one* request over an agent loop is unaffected either way; what is in
+doubt is whether the route permits it. [#23](https://github.com/henricos/extract-slides/issues/23)
+measures it.
