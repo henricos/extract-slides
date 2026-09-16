@@ -32,8 +32,10 @@ there is no next one, backward into the previous. The manifest side of this is
 [#14](https://github.com/henricos/extract-slides/issues/14).
 
 **The AI pass never fires on its own.** A key in the environment enables nothing; only an
-explicit `prune` runs it. One request, images at **680 px** on the long edge, `claude-opus-5`
-by default, overridable by environment variable. No loop, no tools, no agent framework.
+explicit `prune` runs it. One request, images at **680 px** on the long edge,
+`google/gemini-3.8-flash` by default — this ADR first chose `claude-opus-5`; see the
+2026-09-16 amendment on the model — overridable by environment variable. No loop, no
+tools, no agent framework.
 Without a key the path is simply absent, and the tool says once how to enable it.
 
 ## Why
@@ -92,6 +94,10 @@ An image costs `⌈w/28⌉ × ⌈h/28⌉` visual tokens, so the whole talk fits 
 the API allows 600 images per request on 1M-context models, with a 2000 px per-side limit
 above 20 images that 680 px passes comfortably. Where the constraint does not bite, buying
 the minimum is a false economy.
+
+The token and cost columns of that table are Anthropic's arithmetic and did not survive
+the change of model; the 680 px choice did, because it was made on what a human can see
+in the hardest pair. See the 2026-09-16 amendment.
 
 This failure mode was observed before it was measured: reading a 320 px contact sheet of
 this fixture, `008` and `009` were taken for the same image. They differ in 13.9 % of
@@ -172,3 +178,49 @@ lost, not merely the request count.
 The reasoning for *one* request over an agent loop is unaffected either way; what is in
 doubt is whether the route permits it. [#23](https://github.com/henricos/extract-slides/issues/23)
 measures it.
+
+### 2026-09-16 — the single request is confirmed, and the model changes to Gemini 3.8 Flash
+
+From [#23](https://github.com/henricos/extract-slides/issues/23), measured on the shipping
+route with the `openrouter` SDK. Spike and raw logs on
+[`prototype/prune-request`](https://github.com/henricos/extract-slides/tree/prototype/prune-request).
+
+**The single request survives, and the doubt raised just above is retired.** 216 cropped
+captures at 680 px — 6.23 MB, 8.30 MB base64, the measured volume of one 45-minute talk —
+went through as **one** request in 172 s, returning the index list with `finish_reason: stop`.
+Nothing was refused for image count at any size tried: 3, 25, 50, 100, 216. The
+`too many images and documents: 27 + 0 > 20` report is a *validation* error returned in
+seconds, and nothing of that kind appeared. There is no batching, no overlap, and the model
+sees the whole talk at once, which is the property the single request was bought for.
+
+**The model changes to `google/gemini-3.8-flash`**, which is the model actually measured on
+this route, and it is cheaper: **$0.278** per talk against the $0.37 above.
+`anthropic/claude-opus-5` was never measured over OpenRouter. Since OpenRouter states these
+limits vary per provider and per model — the reason #23 existed at all — the evidence above
+licenses only the model it was collected on, so the decision follows the measurement rather
+than the other way round.
+
+**The per-image token arithmetic above is Anthropic's and does not transfer.** The 350 visual
+tokens per image at 680 px come from `⌈w/28⌉ × ⌈h/28⌉`. Gemini charges **1 099**, three times
+as much, stable across every run — 237 334 prompt tokens for 216 images, against a 1M context,
+so nothing binds there either. The cost per talk lands below the table's figure only because
+the price per token is 6.7× lower, $0.75 against $5 per million. **The 680 px decision is
+untouched.**
+
+**`prune` must send a large `max_tokens`.** This is the one constraint that actually binds,
+and it sits on the *output* side, which this ADR never considered. Reasoning tokens grow with
+the image count: 1 918 at 3 images, 8 274 at 25, 13 085 at 50, 26 318 at 216. A run capped at
+16 000 starved the answer at 100 images — 15 359 spent on reasoning, 637 left — and the reply
+degenerated from the index list into per-image prose, cut with `finish_reason: length`. Sizing
+`max_tokens` for the answer alone silently destroys the answer. `prune` sends the model's
+ceiling, 65 536.
+
+**`reasoning: {"enabled": false}` is silently ignored** by this model; three runs were sent
+with it and reasoned anyway. `reasoning_effort` is the working lever, and `low` is what the
+216-image run used.
+
+**One run is recorded as inconclusive so it is not mistaken for a ceiling.** A first attempt
+at 216 images, reasoning on and `max_tokens=16000`, never returned, raising `ReadTimeout`
+after 3 648 s with no error text from the route. Latency is otherwise sublinear in image
+count — 25 to 50 doubled the input and raised latency 1.5× — and the successful run makes
+this a property of that request rather than of the route.

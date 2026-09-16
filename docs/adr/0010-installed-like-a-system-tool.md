@@ -215,6 +215,10 @@ survives the change of route. `anthropic/claude-opus-5` is served on OpenRouter 
 context and image input at $5 per million input tokens — the same number that produced
 $0.37 per talk — plus OpenRouter's platform fee on credit purchases.
 
+*Superseded by [#23](https://github.com/henricos/extract-slides/issues/23).* The default
+model is now `google/gemini-3.8-flash`, the one actually measured on this route, at $0.278
+per talk. The SDK choice, the single-function call and the wire format are unaffected.
+
 ### The model lives in the shared cache, and downloads when it is needed
 
 `small` is 464 MB, fetched once from the Hugging Face hub and served offline thereafter
@@ -289,13 +293,13 @@ because credentials happen to exist.
 
 ## What this decision does not decide
 
-- **Whether `prune` can send ~210 images in one request over this route.**
-  [ADR 0008](0008-the-deletion-pass-two-ways-to-name-the-surplus.md) rests on limits
-  measured against Anthropic's API directly (600 images per request on 1M-context models, a
-  32 MB request ceiling). OpenRouter documents no such limits and states that they vary by
-  provider and model, and there is a public report of `too many images and documents:
-  27 + 0 > 20` surfacing through it. Changing the route put this premise in doubt;
-  [#23](https://github.com/henricos/extract-slides/issues/23) settles it.
+- ~~**Whether `prune` can send ~210 images in one request over this route.**~~ **Settled by
+  [#23](https://github.com/henricos/extract-slides/issues/23): it can.** 216 images went
+  through as one request in 172 s, and nothing was refused for image count at any size
+  tried. The doubt came from limits [ADR 0008](0008-the-deletion-pass-two-ways-to-name-the-surplus.md)
+  had measured against Anthropic's API directly, which OpenRouter neither documents nor
+  inherits. Settling it moved the default model to `google/gemini-3.8-flash`, because that
+  is the one the measurement covers.
 - **Windows and macOS.** The installer targets Linux, which is where the tool runs. Nothing
   here forbids the others; nothing here verified them either.
 - **How often anyone actually runs `self-update`.** The mechanism is decided; the cadence is
