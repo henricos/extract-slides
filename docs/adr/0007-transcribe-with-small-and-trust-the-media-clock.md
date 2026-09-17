@@ -10,9 +10,10 @@
 **The runtime is `faster-whisper` on CTranslate2**, `device="cpu"`, `compute_type="int8"`,
 `cpu_threads=2`, `vad_filter=True`, `beam_size=5`, `word_timestamps=True`.
 
-**The model is `small`.** Not `medium`, which the research named as the quality knee.
-`medium` stays reachable through a `--model` flag as the quality opt-in, and pt-BR is the
-case most likely to need it — see *What this decision does not decide*.
+**The model is `small` for English and `medium` for Portuguese.** Not `medium` everywhere,
+which the research named as the quality knee. `medium` also stays reachable through a
+`--model` flag as the quality opt-in on any language. The language condition was added on
+2026-09-17; see the amendment at the end.
 
 **Two guards, one rule: the media's own duration is the authority on time.**
 
@@ -182,17 +183,14 @@ first use. It must be pinned explicitly alongside.
 - **`--force-stt` has a measured basis**, and the number to beat is YouTube's, not zero.
 - **The model is a flag, not a lock-in.** `small` is the default; `medium` is one flag away
   and costs three times as much for no measured English gain.
+- **The figures above are the English path.** Portuguese runs `medium` per the 2026-09-17
+  amendment, which triples the transcription cost and roughly doubles peak memory there.
 
 ## What this decision does not decide
 
-- **Portuguese is unmeasured.** The operator ruled pt-BR out of this spike: the reference set
-  has no pt-BR video and his own corpus is entirely English. The exposure is narrow but real
-  — Whisper is one multilingual model, so choosing `small` for English chooses it for
-  Portuguese too, and `docs/research/stt-cpu.md` §1 puts `small` at the pt **floor** (CV9
-  12.5) with `medium` at the **knee** (8.1). English measured no difference between the two;
-  Portuguese, on published numbers, would. **If a pt-BR video ever disappoints, `--model
-  medium` is the first thing to try**, and the quality claim for it there is untested here.
-  This is the one place where the rejected candidate might still be right.
+- ~~**Portuguese is unmeasured.**~~ **Measured on 2026-09-17 by
+  [#22](https://github.com/henricos/extract-slides/issues/22); see the amendment at the end.**
+  The rejected candidate was right there, and the default is now conditional on the language.
 - **Whether Parakeet's Portuguese is usable.** Untested, and flagged European by its vendor.
 - **Which caption track to pick** on a video with 21 `-orig` tracks, and what the transcript
   looks like in the output — [#14](https://github.com/henricos/extract-slides/issues/14).
@@ -207,3 +205,83 @@ first use. It must be pinned explicitly alongside.
 `batch.sh` (the candidate list), `wer.py` (scoring, with the caption-overrun clip),
 `timing.py` (word clock against the caption clock). Raw transcripts and metrics under
 `out/spike-stt/`.
+
+## Amendments
+
+### 2026-09-17 — `medium` becomes the default when the audio is Portuguese
+
+From [#22](https://github.com/henricos/extract-slides/issues/22), closing the one gap this
+ADR left open. The original decision was taken on English-only evidence and said so; the
+measurement it was waiting for now exists, and it went against `small`.
+
+**What was measured.** One real pt-BR conference talk — *Web crawling e scraping com Scrapy
+e Scrapy Cloud*, Lidiane Taquehara, Python Brasil, 16m32 of auditorium audio
+(`vmRfO2uULfw`) — transcribed at `small` and at `medium` and read side by side. No ground
+truth and none wanted, per [ADR 0004](0004-capture-generously-delete-afterwards.md): the
+question was whether the operator would be unhappy with the `small` output, and the answer
+was yes.
+
+**The two models agree on ordinary prose and part company on code read aloud.** Over 34
+windows of 30 s the disagreement is low and flat everywhere except a single block from
+2m00 to 5m30, where she reads selectors off a slide. There `small` produces text that
+cannot be repaired by a reader who knows the subject:
+
+> `small`: *"Start RLs do Lusimita … se a RL é o Pebara, o Delta Columns … busque a PNL
+> Pebara e que contém na classe Listerlist … estou buscando os mais lindos HPNL"*
+>
+> `medium`: *"movie meter … eu posso trabalhar com seletores express … a seleção de
+> elementos html … busque a plug-p-body que contém a classe list list … busque a plug-p-b
+> que contém a classe type column"*
+
+Neither is right. `medium` is wrong in a way that keeps the sentence standing, which is the
+difference that decided this.
+
+**The confounder was ruled out, and it is the language.** The pt-BR failure sat entirely in
+a code-reading passage, and none of this ADR's three English fixtures contains one — so
+*language* and *code read aloud* were not separated by the original spike. A second round
+measured the same subject and the same task in English: *Web Scraping in Python 101*, M.
+Yasoob Khalid, EuroPython, 20m18 (`WWQbatJ41Kc`), a talk that reads `request.get`,
+`sel.xpath` and `scrapy.Field` out loud throughout.
+
+| | pt-BR | English |
+|---|---|---|
+| median window disagreement | 0.148 | 0.186 |
+| peak | **0.493** | 0.343 |
+| windows above 0.35 | **5** | **0** |
+
+English has no collapse at all. In its code passages `small` garbles the proper nouns and
+keeps the structure — and in one place preserves a `sel.xpath(...)` that `medium` drops
+entirely, which is this ADR's original finding holding up: in English the two are not
+ordered by quality, they trade different errors.
+
+**How the language is known before the model is chosen.** `small` is loaded first
+regardless and `detect_language` reads it in **2.7 s** — `pt` at p=0.94 and `en` at p=0.96
+on the two fixtures. For English that load is the model that then runs and nothing is
+wasted; for Portuguese it costs one extra model load. The YouTube metadata also states a
+language, but it is absent for local files, so detection is the general handle and the
+metadata is at best a shortcut.
+
+**Rejected: keeping `small` everywhere with `--model medium` as the manual escape hatch.**
+That is what this ADR already shipped, and it is exactly what failed. The flag only helps
+an operator who knows a passage was mangled, and he cannot know that without reading the
+transcript against the video — which is the policing that
+[ADR 0004](0004-capture-generously-delete-afterwards.md) exists to avoid. A default that is
+wrong silently is worse than a default that is slow.
+
+**What it costs.** Portuguese goes from 19.3 to 53.3 minutes per hour of audio, so a
+45-minute pt-BR talk transcribes in about 40 minutes instead of 15, and peak memory goes
+from 1.4 GB to 2.7 GB. The 1.5 GB `medium` weights join the 464 MB `small` ones as a lazy
+download for anyone who transcribes Portuguese — relevant to `prepare` in
+[ADR 0010](0010-installed-like-a-system-tool.md), which pulls that wait forward.
+
+**Left open: YouTube's own pt-BR ASR looks worse than both models.** On the pt-BR fixture
+the free caption — the tool's *primary* transcript path — hallucinated a passage outright
+and emitted 30 s of `[Música]` over continuous speech, while covering about 10 % fewer
+words than either local model. That is one video and it is not this ticket's question, so
+nothing is decided on it here. If it reproduces, what changes is which *path* is default in
+Portuguese, not which model.
+
+The prototype for both rounds is
+[`prototype/stt-ptbr`](https://github.com/henricos/extract-slides/tree/prototype/stt-ptbr) —
+`ptbr.sh`, `en_code.sh` and `align.py` beside the original spike; transcripts under
+`out/spike-stt/vmRfO2uULfw/` and `out/spike-stt/WWQbatJ41Kc/`.
