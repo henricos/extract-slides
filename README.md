@@ -28,10 +28,13 @@ Step 2 runs in **two passes**, and only the first is automatic: it captures gene
 
 ## Where the detail lives
 
-The technical strategy is being settled decision by decision on the
-[strategy map](https://github.com/henricos/extract-slides/issues/1), with an ADR per
-hard decision.
+The technical strategy is **settled**. It was worked out decision by decision on the
+[strategy map](https://github.com/henricos/extract-slides/issues/1), with an ADR per hard
+decision, and consolidated into one document:
 
+- **[`docs/stack.md`](docs/stack.md) — the whole strategy, stage by stage.** Start here:
+  every technique, every constant, the number or argument that chose it, and a pointer to
+  the decision record behind it.
 - [`docs/idea.md`](docs/idea.md) — the idea and requirements.
 - [`docs/adr/`](docs/adr/) — the decisions taken, and why. Start with
   [0004, the two passes](docs/adr/0004-capture-generously-delete-afterwards.md) and

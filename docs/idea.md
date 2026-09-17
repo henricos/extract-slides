@@ -20,6 +20,8 @@ This exact problem was already tackled by a handful of open-source scripts, but 
 - If the video has a YouTube caption (manual or auto-generated), use it directly.
 - Otherwise, extract the audio and run it through a speech-to-text model (Whisper or an equivalent) to produce the transcript.
 
+Refined by [ADR 0007](adr/0007-transcribe-with-small-and-trust-the-media-clock.md): *"use it directly"* holds only for a caption whose last cue ends inside the video. A caption being human-made says nothing about whether it belongs to the video, and one measured fixture carries six minutes of a different talk. A caption that overruns is rejected and the STT path runs instead.
+
 ### 2. Slides (screenshots)
 
 - Download the video.
@@ -30,6 +32,8 @@ This exact problem was already tackled by a handful of open-source scripts, but 
 
 - Apply automatic cropping to each screenshot so that only the slide region remains — necessary whenever the slide occupies a smaller box within the frame rather than the full screen.
 - A full-frame screenshot (no crop) is an acceptable fallback/baseline; the crop is what makes the output actually usable.
+
+Reframed by [ADR 0006](adr/0006-crop-by-cutting-the-presenter-away.md): the crop never looks for the slide region, it removes what the presenter occupies, so *"only the slide region remains"* describes the outcome rather than the method. The full frame is not a rare fallback — it is the correct answer on four of the six reference fixtures, and a stage that declines to cut is a stage refusing to guess.
 
 ## Non-goals
 
@@ -59,6 +63,9 @@ The two paths that were on the table:
 The heavy path was never forced: the whole dependency chain installs wheels-only, with no compilation and no system package, so there was nothing for a service wrapper to solve.
 
 ## Open questions
+
+**None left.** Every question this document raised is answered, and the answers are
+consolidated in [`docs/stack.md`](stack.md). The list is kept below for the record.
 
 - ~~Exact slide-change detection strategy (frame differencing, OCR-based, content-change detection, timestamp-based).~~ Settled by [ADR 0005](adr/0005-pass-1-pinned-anchor-edge-signal-watchdog.md): an edge difference against a pinned anchor, with a watchdog.
 - ~~Exact slide-region cropping strategy (edge/rectangle detection of the slide frame, tracking across the video).~~ Settled by [ADR 0006](adr/0006-crop-by-cutting-the-presenter-away.md): the crop never looks for the slide, it removes what the presenter occupies.
