@@ -1,4 +1,4 @@
-"""PROTOTYPE (issue #22) — put small, medium and YouTube's pt ASR side by side in time.
+"""PROTOTYPE (issue #22) — put small, medium and YouTube's own ASR side by side in time.
 
 Throwaway. There is no ground truth and none is wanted (ADR 0004): this exists so the
 operator can *read* the three and say whether `small` would make him unhappy. The
@@ -59,9 +59,10 @@ def divergence(a, b):
 
 def main():
     vid = sys.argv[1]
+    cap_lang = sys.argv[2] if len(sys.argv) > 2 else "pt-orig"
     small, m_small = load_spike(vid, "fw-small-t2-vad")
     medium, m_medium = load_spike(vid, "fw-medium-t2-vad")
-    yt = load_caption(CACHE / "captions" / f"{vid}.pt-orig.json3")
+    yt = load_caption(CACHE / "captions" / f"{vid}.{cap_lang}.json3")
 
     dur = max(m_small["audio_s"], m_medium["audio_s"])
     n = int(dur // WINDOW) + 1
