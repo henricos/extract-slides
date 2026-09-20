@@ -47,3 +47,17 @@ In pt-BR text for humans (chat), avoid overusing the em dash ("—") to interlea
 - If there are files unrelated to the task outside staging, ask the operator what to do. Never mention pending files in the commit message.
 - **NEVER** add AI authorship or attribution trailers (e.g. `Co-Authored-By`, as Claude Code inserts by default), regardless of the tool in use.
 - `git push` may be blocked by the tool's sandbox. If that happens, run the push outside the sandbox — do not delegate it to the operator because of a network failure.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in this repo's GitHub Issues, driven by the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles, each label string equal to its name. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` at the root and the ADRs in `docs/adr/`. See `docs/agents/domain.md`.
