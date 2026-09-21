@@ -612,8 +612,9 @@ These are measured traps, not style preferences. Each cost a spike some time to 
   documentation and code, two of them in this project's own research notes.
   `AutoSlides-Extractor` does **not** use SSIM — it is a single-window *global* correlation, so
   its published 0.9985 threshold is meaningless for a windowed implementation.
-- **One decode pass can sweep a whole parameter grid bit-exactly** — 400 configs in 0.56 s
-  against ~107 minutes of re-decoding. Worth knowing before anyone writes a re-decoding loop.
+- **A parameter sweep should decode once and re-analyse the held samples**, never re-decode per
+  configuration. Decode dominates so completely — see the next bullet — that the two approaches
+  are not the same order of magnitude. Worth knowing before anyone writes a re-decoding loop.
 - **Re-running detection is cheap**: the whole sweep set, 45 min 55 s, runs in 2 min 45 s, and
   the analysis itself is 0.56 ms per sample. Decode is the entire cost. A persisted per-sample
   feature cache was designed and cut for this reason.
