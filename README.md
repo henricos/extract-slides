@@ -47,6 +47,29 @@ decision, and consolidated into one document:
   [`docs/reference-set-method.md`](docs/reference-set-method.md) for how to find more.
 - [`docs/similar-tools.md`](docs/similar-tools.md) — prior-art scan.
 
+## Status
+
+The package and the CLI shell exist: `extract-slides` installs, every command of the
+surface is there, and `--help` describes it. **No pipeline stage is implemented yet** —
+every command says so and exits 2.
+
+## Development
+
+Python 3.12 or newer, and [`uv`](https://docs.astral.sh/uv/). The whole stack installs as
+prebuilt wheels; nothing compiles.
+
+```sh
+uv venv
+uv pip install --only-binary :all: -e . --group dev
+.venv/bin/python -m pytest
+.venv/bin/extract-slides --help
+```
+
+Every shipping dependency is pinned to an exact version except the downloader, which
+carries a floor. [ADR 0010](docs/adr/0010-installed-like-a-system-tool.md) explains why the
+split is the whole version policy. The one-line installer that end users will run is
+[#35](https://github.com/henricos/extract-slides/issues/35) and does not exist yet.
+
 ## Tools
 
 - [`tools/candidates/`](tools/candidates/) — find and screen candidate videos for the

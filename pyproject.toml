@@ -1,0 +1,43 @@
+[project]
+name = "extract-slides"
+version = "0.1.0"
+description = "Reconstruct a presentation from a recorded talk: the transcript plus one screenshot per distinct slide."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Henrico Scaranello" }]
+requires-python = ">=3.12"
+
+# Every shipping dependency is pinned to an exact version, because the spikes
+# measured one combination and nothing re-measures it on the user's machine.
+# `yt-dlp` carries a floor instead: YouTube is an adversary on a schedule, and
+# a pin there stops downloading in an unpredictable number of weeks.
+# -> docs/adr/0010-installed-like-a-system-tool.md
+dependencies = [
+    "opencv-python-headless==5.0.0.93",
+    "numpy==2.5.3",
+    "faster-whisper==1.2.1",
+    "typer==0.27.2",
+    "rich==15.0.0",
+    "openrouter==1.2.21",
+    "yt-dlp>=2026.8.19",
+]
+
+[project.scripts]
+extract-slides = "extract_slides.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/henricos/extract-slides"
+
+[dependency-groups]
+dev = ["pytest==9.1.1"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/extract_slides"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

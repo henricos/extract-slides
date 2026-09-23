@@ -11,8 +11,12 @@ is wrong — fix it here. Where an ADR and its own research note disagree, the A
 research was read before anything was measured, and several of its rankings did not survive
 measurement.
 
-Nothing below has been implemented. What exists is six throwaway spikes, on branches, that
-measured the numbers quoted here.
+Implementation began with [#25](https://github.com/henricos/extract-slides/issues/25) and
+has reached the package and the CLI shell: the pinned dependency set of §3, the surface of
+§11 with every command present, the constants of §13 in one module, and the output shape of
+§11 in another. **No pipeline stage exists yet** — every command reports that and exits.
+Besides that, what exists is six throwaway spikes, on branches, that measured the numbers
+quoted here.
 
 ---
 
