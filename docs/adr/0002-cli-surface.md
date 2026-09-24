@@ -72,6 +72,8 @@ one-shot shape forbade. The two were never really in tension: the stage pipeline
   methods, no private API. Measured cost: a bare token colliding with a subcommand name
   is ambiguous (`extract-slides crop` meaning a local file named `crop`), and it fails
   **loudly**, asking for `DIR`, rather than silently. Write `./crop` for that case.
+  **A fourth method, `main`, was added and the error now says `./crop` itself** — see the
+  amendment at the end.
 - **Only step 1 takes a URL.** Every later stage takes a directory. The mock's first
   version had two commands each taking a URL and doing its own acquisition, which
   duplicated work and blurred the pipeline.
@@ -206,3 +208,39 @@ stack that the spikes measured.
 Neither command takes a URL or a directory, so neither disturbs the verbless default path:
 `prepare` and `self-update` are not plausible filenames, and the ambiguity this ADR worried
 about does not arise.
+
+### 2026-09-24 — `--out`, `--version`, and a fourth `Group` method
+
+From [#25](https://github.com/henricos/extract-slides/issues/25), while building the shell
+this ADR specifies. Three corrections, none of them to the structure.
+
+**`--out DIR` / `-o DIR` joins the surface**, on the default path and on `fetch`, and
+defaults to `./out`. The surface above says what the output directory is called
+(`<slug>-<video-id>/`) and never says where it is put, which left the parent implied. It
+was not entirely undocumented — this repository's `.gitignore` has carried
+`out/` with the comment "Default output directory of the CLI (see
+docs/adr/0002-cli-surface.md)" since before the tool existed, pointing at an ADR that did
+not in fact say so. This closes that loop. The flag is on the two commands that create a
+directory; every later stage is given one and has nothing to place.
+
+**`--version` joins the surface** on the root. It is in no decision above because it is a
+convention rather than a choice, but a tool that ships `self-update` has to be able to say
+what it is updating from, and [#26](https://github.com/henricos/extract-slides/issues/26)
+puts the tool version in the manifest's run header. Recording it keeps the surface
+enumerable — which is the property the "there is no `review`, no `--transcript-only`" rule
+depends on.
+
+**The `TyperGroup` subclass overrides a fourth method: `main`.** The consequence above
+names `parse_args`, `list_commands` and `format_usage`. `main` is the same kind of
+override — a standard `Group` method, no private API — and it exists for one reason: this
+ADR promises "a machine-readable object on failure with exit 2" under `--report json`, and
+a *parsing* failure is a failure the caller must handle too. Left to the framework, a bad
+command line prints a message and exits 2 with nothing on stdout, so an unattended caller
+gets the exit code and nothing to parse. The framework still parses and still writes the
+message a person reads; only the handling of what it raises is the tool's.
+
+The same override is where the collision this ADR accepts finally names its own way out.
+`extract-slides crop` already failed loudly asking for `DIR`; it now also prints that a
+file called `crop` is written `./crop`. The advice was in this document and not in the
+error, which is the wrong place for it — the person who needs it is at a prompt, not
+reading an ADR.

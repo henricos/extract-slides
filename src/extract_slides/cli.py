@@ -165,7 +165,11 @@ app = typer.Typer(
 # the root, because the documented form puts them after the target
 # (`extract-slides URL --force`) and a root option would have to come before it.
 OUTPUT = typer.Option(
-    Path("./out"), "--out", "-o", help="Directory to write the output directory into."
+    Path("./out"),
+    "--out",
+    "-o",
+    metavar="DIR",
+    help="Where to create the output directory.",
 )
 FORCE = typer.Option(
     False, "--force", help="Ignore what an earlier run finished and recompute."

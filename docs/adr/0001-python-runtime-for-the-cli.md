@@ -119,17 +119,21 @@ and still picks the STT runtime and model on measurement.
 Both from [#3](https://github.com/henricos/extract-slides/issues/3), while building the
 CLI surface mock. Neither changes the decision; both correct a consequence stated above.
 
-**`typer` 0.27.2 vendors `click`.** There is no importable `click` module installed
-alongside it: it lives as the private `typer._click`. Two effects.
+**`typer` 0.27.2 vendors `click`.** ~~There is no importable `click` module installed
+alongside it:~~ it lives as the private `typer._click`. Two effects.
 
-- "Reversible because `typer` is `click` underneath" is still true in substance, but
+- ~~"Reversible because `typer` is `click` underneath" is still true in substance, but
   falling back to plain `click` now means **adding a real dependency**, not dropping a
-  wrapper off something already present.
+  wrapper off something already present.~~
 - Subclassing for CLI behaviour goes through `typer.core.TyperGroup`. Measured: the
   verbless default path in [ADR 0002](0002-cli-surface.md) needed exactly this, and it
   worked using only standard `Group` method overrides (`parse_args`, `list_commands`,
-  `format_usage`) with **no private imports**. So the cost is modest, but code that does
-  `import click` will not run.
+  `format_usage`) with **no private imports**. So the cost is modest, but ~~code that does
+  `import click` will not run~~.
+
+**Both struck passages are wrong** — a real `click` ships in the set, by another route —
+and the correction is the amendment of 2026-09-24 at the end. The vendoring itself, and
+the `TyperGroup` conclusion drawn from it, stand.
 
 **"Never as a bordered panel" is scoped to `--help`.** The original reasoning was about
 `typer`'s help panels, which fragment reference text the reader scans. It over-generalised
@@ -137,3 +141,44 @@ to all `rich` output. A border does earn its keep on the **final report**: a dis
 block of result, read at a glance, visually distinct from the log above it. The running
 log stays borderless and uses indentation, symbols and whitespace instead. See
 [ADR 0002](0002-cli-surface.md).
+
+### 2026-09-24 — `click` *is* importable, and that is worse than it not being
+
+From [#25](https://github.com/henricos/extract-slides/issues/25), while writing the real
+CLI against the pinned set. The amendment above says "there is no importable `click`
+module installed alongside it" and concludes that "code that does `import click` will not
+run". Half of that is right and the conclusion is wrong, in the direction that hurts.
+
+**`typer` really does vendor `click`, and no longer depends on it.** Verified on
+`typer` 0.27.2: its declared dependencies are `shellingham`, `rich`, `annotated-doc` and
+`colorama` on Windows. Nothing else. The vendored copy is 15 modules under
+`typer/_click/`, and `typer.core.TyperGroup` subclasses it. So the original finding holds
+where it was measured — installing `typer` brings no `click` distribution.
+
+**But the shipping set contains `click` 8.5.0 anyway,** and always did. It arrives
+unconditionally through `huggingface-hub` 1.32.0, which `faster-whisper` requires, so it
+is inside the 38 packages [ADR 0010](0010-installed-like-a-system-tool.md) counted. The
+amendment above measured `typer`'s dependency tree and read the result as a fact about the
+environment; the environment has another branch.
+
+**The two `click`s are different module objects with disjoint class hierarchies.**
+`click.core.Command is typer._click.core.Command` is `False`, and
+`issubclass(typer.core.TyperGroup, click.core.Group)` is `False`. So `import click`
+does not fail. It succeeds, and everything built on it — a `Group` subclass, an
+`except UsageError`, an `isinstance` check — is silently about a hierarchy the running
+program never instantiates. **A trap that fails at import is one a person finds in
+seconds; this one has no symptom at all.** That is the correction that matters, and it
+is why it is recorded as an amendment rather than a typo fix in `docs/stack.md`.
+
+Two consequences follow.
+
+- **Still no `import click` anywhere in this project**, for a sharper reason than before.
+  Where click's own API is genuinely needed — [#25](https://github.com/henricos/extract-slides/issues/25)
+  needed the `UsageError` class to put a parsing failure through the JSON contract — it is
+  reached through a public `typer` symbol (`typer.BadParameter.__bases__[0]`), never
+  through an import of either module. ADR 0002's "no private API" rule is kept.
+- **"Falling back to plain click means adding a real dependency" is now imprecise.** The
+  distribution is already installed, so the fallback would cost no new package. It would
+  still cost a *declared and pinned* dependency, because relying on a transitive one that
+  `huggingface-hub` chose is how a stack breaks quietly. The conclusion stands; the
+  reasoning behind it does not.

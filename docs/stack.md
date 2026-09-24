@@ -116,9 +116,11 @@ opencv-python-headless   numpy   faster-whisper   yt-dlp   typer   rich   openro
 
 **CLI framework details.** `typer` with `rich_markup_mode=None`, so it delegates to click's
 plain formatter — indented, two-column, no boxed panels. `typer` 0.27 **vendors** click as
-the private `typer._click`: there is no importable `click`, so `import click` will not run,
-and subclassing goes through `typer.core.TyperGroup`. `rich` is used for the program's own
-progress output and the final report; the ban on bordered panels is scoped to `--help`.
+the private `typer._click` and no longer depends on the distribution, so subclassing goes
+through `typer.core.TyperGroup`. A real `click` 8.5.0 is in the set anyway, pulled in by
+`huggingface-hub` — a *different* module object, which makes `import click` worse than
+broken; see §14. `rich` is used for the program's own progress output and the final
+report; the ban on bordered panels is scoped to `--help`.
 
 ---
 
@@ -482,6 +484,7 @@ these carry the same content"*, which is one vision call with a list of numbers 
 ```
 extract-slides URL                   # default path: every stage, resuming
 extract-slides URL --force           # ignore existing work, recompute
+extract-slides URL --out DIR         # where to put the output directory (./out)
 
 extract-slides fetch URL             # step 1: acquire + transcribe
 extract-slides transcribe DIR        # redo the transcript, no re-download
@@ -498,13 +501,16 @@ extract-slides prune DIR --apply     # the model deletes, then reconciles
 extract-slides prepare               # download the STT model now instead of on first use
 extract-slides self-update           # update the tool and its dependencies
 extract-slides self-update --yt-dlp  # update only yt-dlp, leaving the rest pinned
+extract-slides --version             # what self-update would be updating from
 ```
 
 - **The bare root dispatches to a hidden default command.** A first token that is not a known
   subcommand is the target. This needs a `typer.core.TyperGroup` subclass overriding
-  `parse_args`, `list_commands` and `format_usage` — standard `Group` methods, no private API,
-  measured as working. A bare token colliding with a subcommand name fails **loudly**, asking
-  for `DIR`; write `./crop` for that case.
+  `parse_args`, `list_commands`, `format_usage` and `main` — standard `Group` methods, no
+  private API, measured as working. A bare token colliding with a subcommand name fails
+  **loudly**, asking for `DIR` *and* saying to write `./crop`. The `main` override is what
+  puts a parsing failure through the same JSON contract a run failure uses, so
+  `--report json` never answers with exit 2 and an empty stdout.
 - **Only step 1 takes a URL.** Every later stage takes a directory.
 - **Resume by default, never silently.** Every reused stage prints a line saying so and naming
   `--force`. State lives inside the output directory, per video — there is no global run index,
@@ -515,6 +521,11 @@ extract-slides self-update --yt-dlp  # update only yt-dlp, leaving the rest pinn
   Only `pair` stops at itself.
 - **`--force` works per stage.** `--no-crop` and `--roi` (four normalised floats) are the
   operator's escape hatches; `cv2.selectROI` is not used.
+- **`--out DIR` (`-o`) sets where the output directory is created**, defaulting to `./out`.
+  It is on the default path and on `fetch`, the two commands that create one; every later
+  stage is handed a directory and has nothing to place. **`--version`** is on the root,
+  because a tool that ships `self-update` has to say what it is updating from and the
+  manifest's run header carries the same string.
 - **Two output streams under `--report json`**: the JSON document on stdout, all human
   narration on stderr, a machine-readable object on failure with exit 2.
 - **Stage output is a block, reuse is a line.** No borders in the running log; the final report
@@ -602,8 +613,16 @@ These are measured traps, not style preferences. Each cost a spike some time to 
 - **On the headless OpenCV wheel, `cv2.selectROI` and `cv2.imshow` exist as attributes** —
   `hasattr` returns `True` — but raise `The function is not implemented` when called. Headless
   capability cannot be feature-detected that way.
-- **`import click` will not run.** `typer` vendors it as the private `typer._click`. Falling
-  back to plain click means adding a real dependency.
+- **`import click` runs, and that is the trap.** `typer` vendors click as the private
+  `typer._click` and declares no dependency on it — but `huggingface-hub` requires
+  `click>=8.4.2`, so the real distribution is in the 38 packages regardless. The two are
+  different module objects: `click.core.Command is typer._click.core.Command` is `False`
+  and `issubclass(typer.core.TyperGroup, click.core.Group)` is `False`. A `Group` subclass
+  or an `except UsageError` written against the importable one compiles, imports, runs, and
+  refers to a hierarchy the program never instantiates. **There is no symptom.** Reach
+  click's API through a public `typer` symbol instead —
+  `typer.BadParameter.__bases__[0]` is the `UsageError` class — and import neither module.
+  → [ADR 0001](adr/0001-python-runtime-for-the-cli.md), amendment 2026-09-24
 - **The crop needs the video, not only pass 1's images.** The movement map cannot be rebuilt
   from captures that are seconds or minutes apart, so `extract-slides crop DIR` running on its
   own requires the source video still on disk.
