@@ -11,7 +11,6 @@ import json
 import pytest
 
 from extract_slides.reporting import ReportFormat, Reporter
-from tests.conftest import BORDERS
 
 
 @pytest.fixture
@@ -76,7 +75,7 @@ def test_reuse_lines_stack_against_each_other(streams):
     assert body.count("\n") == 2, "a fully resumed run stays compact"
 
 
-def test_the_running_log_carries_no_borders(streams):
+def test_the_running_log_carries_no_borders(streams, borders):
     out, _ = streams
     r = reporter(ReportFormat.text, streams)
     with r.stage("detect", position=3, of=5) as log:
@@ -85,16 +84,16 @@ def test_the_running_log_carries_no_borders(streams):
         log.done("detected in 2m 51s")
     r.reused("crop", position=4, of=5, gist="auto")
 
-    assert not (BORDERS & set(out.getvalue()))
+    assert not (borders & set(out.getvalue()))
 
 
-def test_the_final_report_is_a_bordered_panel(streams):
+def test_the_final_report_is_a_bordered_panel(streams, borders):
     out, _ = streams
     r = reporter(ReportFormat.text, streams)
     r.report(rows=[("slides", "216"), ("output", "./out/talk-abc")], payload={"status": "ok"})
 
     body = out.getvalue()
-    assert BORDERS & set(body), "the final report is the one place a border earns its keep"
+    assert borders & set(body), "the final report is the one place a border earns its keep"
     assert "slides" in body and "216" in body
 
 

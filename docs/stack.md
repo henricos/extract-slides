@@ -521,6 +521,10 @@ extract-slides --version             # what self-update would be updating from
   Only `pair` stops at itself.
 - **`--force` works per stage.** `--no-crop` and `--roi` (four normalised floats) are the
   operator's escape hatches; `cv2.selectROI` is not used.
+- **`--force-stt` and `--model` are the transcribe stage's two overrides**, specified in §5
+  and belonging to whichever commands transcribe. They are named here because this list is
+  the enumerated surface, and a flag decided in another section but missing from this one is
+  how a surface stops being enumerable.
 - **`--out DIR` (`-o`) sets where the output directory is created**, defaulting to `./out`.
   It is on the default path and on `fetch`, the two commands that create one; every later
   stage is handed a directory and has nothing to place. **`--version`** is on the root,
@@ -675,12 +679,18 @@ them is blocked on anything:
 - **The prompt and the structured output schema `prune` sends to the model.** The endpoint
   returns a list of numbers against a JSON schema natively.
 - **Which constants from §13 become CLI flags**, and their names.
-- **Module boundaries, error taxonomy, logging, and the exact text of every message.** ADR 0002
-  fixes the *shape* of the output — block versus line, stdout versus stderr, panel versus log —
-  not the wording.
-- **Test strategy.** There is no metric and no ground truth, so there is nothing to assert an
-  output against beyond the structural contract. The six sweep fixtures exist as material to
-  look at, not as expected values.
+- ~~**Module boundaries**~~, error taxonomy, logging, and the exact text of every message.
+  ADR 0002 fixes the *shape* of the output — block versus line, stdout versus stderr, panel
+  versus log — not the wording. **Module boundaries were settled** by the build spec,
+  [#24](https://github.com/henricos/extract-slides/issues/24): thirteen modules named by
+  responsibility, and two seams — the output directory entered through the CLI, and the
+  sampler — with the acquirer and the model client injected as the outside world.
+- ~~**Test strategy.**~~ Also settled by [#24](https://github.com/henricos/extract-slides/issues/24),
+  on the premise stated here: there is no metric and no ground truth, so there is nothing to
+  assert an output against beyond the structural contract, and the six sweep fixtures are
+  material to look at rather than expected values. What #24 adds is the three grades of input
+  — no pixels, constructed frames, a real video file — and the rule that only external
+  behaviour at a seam is tested.
 - **Windows and macOS.** The installer targets Linux. Nothing forbids the others; nothing
   verified them either.
 - **The cadence of `self-update`.** The mechanism is decided; when to run it is the operator's.

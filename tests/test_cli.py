@@ -9,25 +9,20 @@ dispatched, how help reads, and which stream carries what.
 import json
 
 import pytest
-from typer.testing import CliRunner
+import typer
 
-from extract_slides.cli import app
-from tests.conftest import BORDERS
+from extract_slides.cli import RootGroup, app
 
 #: Every stage command, and what it wants when it is given nothing.
 STAGE_COMMANDS = ["transcribe", "detect", "crop", "pair", "drop", "prune"]
 
 
-@pytest.fixture
-def cli():
-    return CliRunner()
 
-
-def test_help_renders_in_the_plain_two_column_form(cli):
+def test_help_renders_in_the_plain_two_column_form(cli, borders):
     result = cli.invoke(app, ["--help"])
 
     assert result.exit_code == 0
-    assert not (BORDERS & set(result.output)), "no bordered panels in --help"
+    assert not (borders & set(result.output)), "no bordered panels in --help"
     assert "Options:" in result.output
     assert "Commands:" in result.output
     # Two columns, indented: the flag on the left, its description on the right.
@@ -139,6 +134,17 @@ def test_no_arguments_prints_help_rather_than_guessing(cli):
     result = cli.invoke(app, [])
 
     assert "Commands:" in result.output
+    assert result.exit_code == 2, "being told nothing is a usage failure, not a success"
+
+
+def test_a_root_level_parse_failure_honours_the_contract_too(cli):
+    # The collision and the missing argument both fail inside a subcommand.
+    # This one fails before any subcommand is chosen, which is a different
+    # path through the group, and the caller is owed the same object.
+    result = cli.invoke(app, ["--bogus", "--report", "json"])
+
+    assert result.exit_code == 2
+    assert json.loads(result.stdout)["error"] == "usage"
 
 
 def test_version_is_reported(cli):
@@ -146,3 +152,37 @@ def test_version_is_reported(cli):
 
     assert result.exit_code == 0
     assert "extract-slides" in result.output
+
+
+def test_the_attached_form_of_the_report_flag_is_read_too(cli):
+    # The flag has to be found on a command line that never finished parsing,
+    # so both spellings are read off the argv by hand and both need proving.
+    result = cli.invoke(app, ["crop", "--report=json"])
+
+    assert result.exit_code == 2
+    assert json.loads(result.stdout)["error"] == "usage"
+
+
+def test_an_interrupted_prompt_exits_without_a_traceback(cli):
+    """Nothing prompts yet; the confirmation `prune --apply` owes arrives with it.
+
+    Handling the interrupt is not optional in the meantime: taking the
+    framework out of standalone mode is what lets a parsing failure reach
+    the JSON contract, and it also hands back the interrupt the framework
+    used to absorb. Left alone it would reach the operator as a traceback.
+    """
+    aborting = typer.Typer(cls=RootGroup, rich_markup_mode=None, add_completion=False)
+
+    @aborting.callback()
+    def root() -> None:
+        """A callback keeps the group a group; typer collapses a lone command."""
+
+    @aborting.command()
+    def confirm() -> None:
+        raise typer.Abort()
+
+    result = cli.invoke(aborting, ["confirm"])
+
+    assert result.exit_code == 1
+    assert "Traceback" not in result.stderr
+    assert "Aborted" in result.stderr
