@@ -244,3 +244,47 @@ The same override is where the collision this ADR accepts finally names its own 
 file called `crop` is written `./crop`. The advice was in this document and not in the
 error, which is the wrong place for it — the person who needs it is at a prompt, not
 reading an ADR.
+
+### 2026-09-26 — the stage registry, and what a command invalidates
+
+From [#26](https://github.com/henricos/extract-slides/issues/26), while building the stage
+registry this ADR specifies. The surface is unchanged.
+
+**The three rules above come off one declaration.** The forward chain, resume-by-default
+and per-stage `--force` are written here as three separate consequences; each stage now
+declares only what it needs finished before it can run, and the rest is read off that graph.
+It reproduces the chain exactly as stated: `detect` re-runs `crop` and `pair`, `transcribe`
+re-runs `pair`, `crop` re-runs `pair` (per the 2026-09-15 amendment), and only `pair` stops
+at itself. Declaring the graph before any stage exists is deliberate: it changes shape every
+time a stage is born, and a `detect` written before `crop` existed would chain into nothing
+and need revisiting later.
+
+**A stage's block is headed by its position in the whole pipeline**, so `crop DIR` opens at
+`4/5` after three reuse lines rather than renumbering itself to `1/2`. The position is
+where in the run the operator is, which is the thing the number is for.
+
+**What a command invalidates is what distinguishes the two halves of the surface**, and this
+ADR does not say it anywhere.
+
+The **verbless default path** and **`fetch`** resume: they invalidate nothing, so every stage
+recorded as finished is reused and says so. `--force` invalidates what they cover. Both reach
+that state through the output directory, so both can only resume once they have one: given a
+URL, resuming waits on the acquirer resolving it to a directory
+([#27](https://github.com/henricos/extract-slides/issues/27)), and until then only the form
+that names a directory resumes.
+
+A **stage command names a stage to redo**, and redoing it is what the command means.
+`transcribe DIR` transcribes. This is not symmetry for its own sake — it is forced by
+[ADR 0009](0009-the-output-contract-a-table-of-instants.md), which keeps `pair DIR` on the
+surface for exactly one job, "what to run after editing the transcript by hand". A `pair`
+that reused its own record would do nothing on the one invocation it exists for. The tool
+cannot see a hand edit; the operator typing `pair` is the signal.
+
+The rejected alternative was the uniform one: a stage command resumes like everything else
+and recomputes only under `--force`. It reads better as a rule and fails on the case above.
+
+**`--force` on a stage command is therefore accepted and adds nothing**, because naming the
+stage already asked for it. What "`--force` works per stage" describes is the *granularity*,
+and that part is real and is what the registry provides: `crop DIR` recomputes the crop and
+the pairing while reusing the download, the transcript and the detection, where
+`extract-slides DIR --force` recomputes all five.

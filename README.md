@@ -49,9 +49,12 @@ decision, and consolidated into one document:
 
 ## Status
 
-The package and the CLI shell exist: `extract-slides` installs, every command of the
-surface is there, and `--help` describes it. **No pipeline stage is implemented yet** —
-every command says so and exits 2.
+The package, the CLI shell, the output directory and the stage registry exist:
+`extract-slides` installs, every command of the surface is there, `manifest.json` is written
+and read, and a run pointed at an existing output directory resumes what an earlier one
+finished and says which stages it reused. **No pipeline stage is implemented yet** — a run
+that has work to do names the stage that would do it and exits 2, and a run given a URL has
+work to do from the first stage.
 
 ## Development
 

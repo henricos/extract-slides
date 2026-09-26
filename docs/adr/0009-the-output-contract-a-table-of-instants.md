@@ -287,3 +287,74 @@ invalidation question without the benefit.
   language is the rule and local STT is the fall-through.
 - **Field names and JSON spelling.** The contract above fixes what is carried and what is
   derived; the key names are implementation.
+
+## Amendments
+
+### 2026-09-26 — the field names, the stage record, and the merge the representation does not do
+
+From [#26](https://github.com/henricos/extract-slides/issues/26), while building the output
+directory this ADR specifies. The contract above is unchanged in what it carries; what
+follows fixes the spelling, adds one thing it did not carry, and withdraws one claim it
+should not have made.
+
+**The field names are fixed**, closing the "field names and JSON spelling" this ADR left
+open. A manifest is `{ schema_version, run, slides }`. The run header is `tool_version`,
+`video_id`, `url`, `duration`, `transcript_origin`, `transcript_fidelity`, `stt_model`,
+`cropped`, `detection` and `stages`. A slide row is `file`, `change_at`, `reason`, `rect`,
+`rect_rule` and `layout`, with `rect` as the four normalised numbers in the order `--roi`
+takes them. `schema_version` is bumped when a field changes meaning, not when one is added,
+and a reader that finds a number it does not know stops rather than guessing — the
+alternative is describing a directory it cannot actually read. `layout` is `null` on a row
+pass 1 wrote, because before the crop has clustered anything there is no cluster to name and
+a zero would claim one.
+
+**The run header also records what each stage finished.** [ADR 0002](0002-cli-surface.md)
+puts the resume state inside the output directory rather than in a global run index, and
+this header is the only thing in there that describes the run rather than its contents. So
+each stage gets a record: when it finished, and the gist its reuse line prints.
+
+The alternative was deriving completion from the artefacts — is there a video, is there a
+`transcript.json`, are there rows in `slides/` — and it fails on the case this ADR had
+already anticipated. The header carries *whether the crop ran* precisely because a crop that
+declined and a crop that never happened leave identical pixels; a rule that cannot see that
+cannot see `--no-crop` either. The gist is stored rather than recomputed for the same kind
+of reason: a stage being skipped is exactly a stage that is not available to describe its
+own work.
+
+**The first interval opens at zero, not at the first row's instant.** The contract above
+derives slide `i`'s span from `change_at[i]`, and says the intervals tile the video. On a
+manifest nobody has edited the two readings agree, because
+[ADR 0005](0005-pass-1-pinned-anchor-edge-signal-watchdog.md) always emits the first frame.
+After a `drop` of the opening slide they do not, and opening at zero is what keeps the
+tiling — and with it this ADR's promise that there is no unassigned-cue bucket to diagnose.
+
+**The forward merge is not a property of the representation, and this ADR said it was.**
+The claim reads: "Deleting slide 7 is deleting the line: slide 8's interval starts where 7's
+did, with nothing recomputed, because nothing was stored. The forward-merge rule
+[ADR 0008](0008-the-deletion-pass-two-ways-to-name-the-surplus.md) requires stops being a
+rule and becomes a property of the representation."
+
+Half of it is true. With `[change_at[i], change_at[i+1])`, deleting a row frees its span to
+the row **before** it, not the row after. Delete the slide at 10 s from rows at 0, 10 and
+25, and the speech from 10 to 25 lands on the slide at 0 — which is
+[ADR 0008](0008-the-deletion-pass-two-ways-to-name-the-surplus.md)'s "merge into the previous
+slide", the answer it calls intuitive and wrong, for the reason it gives: the crop keeps the
+later of two duplicates, so a build's orphans lie behind its survivor.
+
+The two ends do work, which is how the error survived. Deleting the **opening** slide merges
+forward, because the first interval opens at zero rather than at a row. Deleting the
+**closing** slide merges backward, which is what that ADR asks for when there is no next
+slide. It is the interior case that is wrong, and the interior case is the progressive build
+its whole argument is about.
+
+So the forward merge is a rule `drop` has to implement
+([#33](https://github.com/henricos/extract-slides/issues/33)), not something the
+representation does for free. The representation supports exactly one mechanism for it: the
+surviving row's instant moves back over the captures deleted ahead of it, which keeps one
+date per row and keeps the tiling. That costs a sentence of this ADR — `change_at` stops
+being strictly the capture's own timestamp and becomes the instant the slide's span opens,
+the same number on any manifest nothing was dropped from. The alternative, a second date on
+the row, is the thing this ADR exists to refuse: two facts that can disagree, through a pass
+that renumbers twice. [#33](https://github.com/henricos/extract-slides/issues/33) chooses;
+[#26](https://github.com/henricos/extract-slides/issues/26) records that the choice is real
+and was not made here, and pins the behaviour with a test so it cannot be assumed away again.

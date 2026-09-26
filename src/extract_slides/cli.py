@@ -11,6 +11,12 @@ The measured cost of that is a bare token colliding with a subcommand name —
 `extract-slides crop` meaning a local file called `crop` — and it fails
 loudly asking for `DIR` rather than guessing. Write `./crop` for that case.
 
+Every command that touches an output directory ends in the same three calls:
+read the manifest, ask `pipeline` for a plan, walk it. What distinguishes them
+is only which stages they invalidate — nothing for the resuming paths, the
+named stage for a stage command — so the chaining and the resume semantics are
+decided in one place rather than once per command.
+
 `rich_markup_mode=None` is what keeps `--help` in click's plain two-column
 form. Note that `typer` vendors click privately, so the group subclass below
 goes through `typer.core.TyperGroup` and overrides only standard `Group`
@@ -26,8 +32,10 @@ from typing import Any, NoReturn
 
 import typer
 
-from extract_slides import __version__
-from extract_slides.reporting import ReportFormat, Reporter
+from extract_slides import __version__, pipeline
+from extract_slides.manifest import Manifest, ManifestError
+from extract_slides.pipeline import Stage
+from extract_slides.reporting import ReportFormat, Reporter, StageLog
 
 PROG = "extract-slides"
 
@@ -196,18 +204,116 @@ DIRECTORY = typer.Argument(
 def _not_implemented_yet(reporter: Reporter, what: str, **details: str) -> NoReturn:
     """Every command body until the ticket that fills it in.
 
-    The shell is real — dispatch, streams and exit codes are what they will
-    be — so a caller wiring against it now is wiring against the final
-    contract. What is missing is the work itself, and saying so is better
+    The shell is real — dispatch, resume, chaining, streams and exit codes are
+    what they will be — so a caller wiring against it now is wiring against the
+    final contract. What is missing is the work itself, and saying so is better
     than a stub that returns something plausible.
     """
     reporter.failure(
         f"{what} is not implemented yet.",
         code="not_implemented",
-        hint="This build is the CLI shell; the pipeline stages are not in it yet.",
+        hint="This build carries the output directory and the stage registry; "
+        "the stages themselves are not in it yet.",
         details=details,
     )
     raise typer.Exit(code=EXIT_FAILURE)
+
+
+def _no_stage_yet(stage: Stage, log: StageLog) -> str:
+    """The stage runner this build hands the registry.
+
+    Every stage is registered and every stage refuses. What the registry then
+    does around that refusal — which stages it reused first, which it would
+    have chained into — is the part this build is here to get right.
+    """
+    raise pipeline.StageNotImplemented(stage)
+
+
+def _existing_run(reporter: Reporter, directory: Path) -> Manifest:
+    """The manifest of the run a command was pointed at.
+
+    Every command but the two that take a URL is handed a directory, so a
+    directory holding no run is a mistake worth naming: the alternative is
+    starting the pipeline at `acquire` against a target nobody supplied.
+    """
+    if not Manifest.path_in(directory).exists():
+        reporter.failure(
+            f"There is no run in {directory} to work on.",
+            code="no_run",
+            hint="Run extract-slides URL to create one.",
+            details={"directory": str(directory)},
+        )
+        raise typer.Exit(code=EXIT_FAILURE)
+    try:
+        return Manifest.read(directory)
+    except ManifestError as error:
+        reporter.failure(
+            f"The manifest in {directory} cannot be read: {error}",
+            code="manifest_invalid",
+            hint="It is the tool's own file. A hand edit that breaks it is not "
+            "recoverable here, and guessing at what it meant would lose a slide.",
+            details={"directory": str(directory)},
+        )
+        raise typer.Exit(code=EXIT_FAILURE) from error
+
+
+def _run_pipeline(
+    reporter: Reporter,
+    *,
+    directory: Path | None,
+    invalidated: Sequence[Stage] = (),
+    through: Stage | None = None,
+    target: str | None = None,
+) -> None:
+    """Plan the run, walk it, and report — the one path every command takes.
+
+    `directory` is `None` when there is no run yet, which is every invocation
+    that starts from a URL. Nothing is then recorded as finished, so the plan
+    begins at `acquire`, which is the right answer for a target nobody has
+    fetched.
+
+    Each stage is recorded as it finishes rather than at the end of the walk,
+    so a run that fails at stage four keeps what the first three did.
+    """
+    document = _existing_run(reporter, directory) if directory else None
+
+    def record(stage: Stage, gist: str) -> None:
+        if document is None or directory is None:
+            return
+        document.record_stage(stage.value, gist)
+        document.write(directory)
+
+    completed = pipeline.completed_from(document.completed_stages()) if document else {}
+    steps = pipeline.plan(completed=completed, invalidated=invalidated, through=through)
+    try:
+        pipeline.execute(
+            steps, reporter=reporter, run_stage=_no_stage_yet, on_complete=record
+        )
+    except pipeline.StageNotImplemented as error:
+        details = {"directory": str(directory)} if directory else {"target": target or ""}
+        _not_implemented_yet(reporter, error.stage.value, **details)
+
+    slides = len(document.slides) if document else 0
+    rows = [("slides", str(slides))]
+    if directory:
+        rows.append(("output", str(directory)))
+    reporter.report(
+        rows=rows,
+        payload={
+            "status": "ok",
+            "directory": str(directory) if directory else None,
+            "slides": slides,
+            "duration": document.run.duration if document else None,
+            "stages": {
+                step.stage.value: "reused" if step.reused else "ran" for step in steps
+            },
+        },
+    )
+
+
+def _redo(report: ReportFormat, directory: Path, stage: Stage) -> None:
+    """Every stage command: name a stage to redo, and chain forward from it."""
+    _run_pipeline(Reporter(report), directory=directory, invalidated=(stage,))
 
 
 def _version(value: bool) -> None:
@@ -243,7 +349,12 @@ def default_path(
     report: ReportFormat = REPORT,
 ) -> None:
     """Run every stage, resuming whatever an earlier run already finished."""
-    _not_implemented_yet(Reporter(report), "The default path", target=target)
+    _run_pipeline(
+        Reporter(report),
+        directory=Path(target) if Path(target).is_dir() else None,
+        invalidated=pipeline.ORDER if force else (),
+        target=target,
+    )
 
 
 @app.command()
@@ -256,7 +367,17 @@ def fetch(
     report: ReportFormat = REPORT,
 ) -> None:
     """Step 1: download the video and produce the transcript."""
-    _not_implemented_yet(Reporter(report), "fetch", target=url)
+    # `directory=None` because resolving a URL to an output directory is the
+    # acquirer's job (#27), so there is nothing here to read a manifest from
+    # yet. Until then `fetch` cannot resume what an earlier `fetch` finished,
+    # although the surface says it does.
+    _run_pipeline(
+        Reporter(report),
+        directory=None,
+        invalidated=(Stage.acquire,) if force else (),
+        through=Stage.transcribe,
+        target=url,
+    )
 
 
 @app.command()
@@ -270,7 +391,7 @@ def transcribe(
     The video and the raw caption stay where they are, so this costs
     the transcription and nothing else.
     """
-    _not_implemented_yet(Reporter(report), "transcribe", target=str(directory))
+    _redo(report, directory, Stage.transcribe)
 
 
 @app.command()
@@ -285,7 +406,7 @@ def detect(
     have to follow it rather than be left describing images that are no
     longer there.
     """
-    _not_implemented_yet(Reporter(report), "detect", target=str(directory))
+    _redo(report, directory, Stage.detect)
 
 
 @app.command()
@@ -303,7 +424,7 @@ def crop(
     that video still in the output directory. It deletes duplicates the
     first test could not see, which is why it re-runs pair.
     """
-    _not_implemented_yet(Reporter(report), "crop", target=str(directory))
+    _redo(report, directory, Stage.crop)
 
 
 @app.command()
@@ -318,7 +439,7 @@ def pair(
     no stored assignment to redo: the manifest holds an instant per
     slide and every interval is derived at read time.
     """
-    _not_implemented_yet(Reporter(report), "pair", target=str(directory))
+    _redo(report, directory, Stage.pair)
 
 
 @app.command()

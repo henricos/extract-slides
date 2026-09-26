@@ -115,8 +115,10 @@ def test_a_failure_exits_two_and_says_so_on_stderr(cli):
     result = cli.invoke(app, ["https://youtu.be/jqpdveK2XAU"])
 
     assert result.exit_code == 2
-    assert result.stdout == "", "an error is never part of the document"
     assert "not implemented" in result.stderr.lower()
+    assert "not implemented" not in result.stdout.lower(), (
+        "under text the running log owns stdout, but an error is never part of it"
+    )
 
 
 def test_a_failure_under_json_writes_a_machine_readable_object(cli):
@@ -188,18 +190,92 @@ def test_an_interrupted_prompt_exits_without_a_traceback(cli):
     assert "Aborted" in result.stderr
 
 
-@pytest.mark.skip(reason="No command can succeed yet; #26 is the first that can.")
-def test_a_successful_run_under_json_puts_the_document_on_stdout(cli):
+def test_a_successful_run_under_json_puts_the_document_on_stdout(cli, output_directory):
     """The half of ADR 0002's two-stream rule that #25 could not prove here.
 
-    The split itself is asserted above, but over a *failure* document,
-    because every command in this build reports that it is not implemented
-    and exits 2. The success document's shape is covered directly against
-    the reporting module, with its streams injected, in `test_reporting.py`
-    — which proves the writer and not the wiring.
-
-    #26 is the first ticket whose commands finish, so it is the first that
-    can assert this the way the ADR states it: invoke a run that succeeds,
-    parse stdout whole, and find every human word on stderr. Write that
-    body and delete this marker.
+    #25 asserted the split at the CLI, but only over a *failure* document,
+    because every command in that build reported that it was not implemented
+    and exited 2. This build has an output directory and a stage registry, so
+    a run against a finished directory succeeds by reusing all five stages —
+    which is the first invocation that can be asserted the way the ADR states
+    the rule: parse stdout whole, and find every human word on stderr.
     """
+    directory = output_directory()
+
+    result = cli.invoke(app, [str(directory), "--report", "json"])
+
+    assert result.exit_code == 0
+    document = json.loads(result.stdout)
+    assert document["status"] == "ok"
+    assert document["slides"] == 3
+    assert document["directory"] == str(directory)
+    assert set(document["stages"]) == {"acquire", "transcribe", "detect", "crop", "pair"}
+    assert "recompute with --force" in result.stderr, "the narration is on stderr, all of it"
+    assert "--force" not in result.stdout, "stdout is the document and nothing else"
+
+
+def test_a_finished_run_reuses_every_stage_and_says_so(cli, output_directory):
+    result = cli.invoke(app, [str(output_directory())])
+
+    assert result.exit_code == 0
+    for position, stage in enumerate(
+        ["acquire", "transcribe", "detect", "crop", "pair"], start=1
+    ):
+        assert f"{position}/5" in result.stdout
+        assert stage in result.stdout
+    assert result.stdout.count("reused") == 5
+    assert "--force" in result.stdout, "resuming is never silent about how to undo it"
+
+
+def test_a_successful_run_ends_in_the_one_bordered_panel(cli, output_directory, borders):
+    result = cli.invoke(app, [str(output_directory())])
+
+    assert borders & set(result.stdout)
+
+
+def test_force_on_the_default_path_reuses_nothing(cli, output_directory):
+    result = cli.invoke(app, [str(output_directory()), "--force", "--report", "json"])
+
+    assert result.exit_code == 2
+    assert json.loads(result.stdout)["error"] == "not_implemented"
+    assert "reused" not in result.stderr, "--force discards the whole run's work"
+    assert "acquire is not implemented" in result.stderr
+
+
+def test_a_stage_command_reuses_what_comes_before_it(cli, output_directory):
+    # "--force works per stage": naming the crop recomputes the crop and what
+    # follows it, and leaves the download, the transcript and the detection.
+    result = cli.invoke(app, ["crop", str(output_directory())])
+
+    assert result.exit_code == 2
+    assert result.stdout.count("reused") == 3
+    for reused in ["acquire", "transcribe", "detect"]:
+        assert reused in result.stdout
+    assert "crop is not implemented" in result.stderr
+
+
+def test_the_stage_a_command_names_is_the_one_that_runs(cli, output_directory):
+    directory = str(output_directory())
+
+    for command in ["transcribe", "detect", "crop", "pair"]:
+        result = cli.invoke(app, [command, directory])
+
+        assert f"{command} is not implemented" in result.stderr
+
+
+def test_a_stage_command_pointed_at_a_directory_with_no_run_says_so(cli, tmp_path):
+    result = cli.invoke(app, ["crop", str(tmp_path), "--report", "json"])
+
+    assert result.exit_code == 2
+    document = json.loads(result.stdout)
+    assert document["error"] == "no_run"
+    assert document["directory"] == str(tmp_path)
+
+
+def test_a_manifest_that_cannot_be_read_stops_the_command(cli, tmp_path):
+    (tmp_path / "manifest.json").write_text("{ not json")
+
+    result = cli.invoke(app, ["detect", str(tmp_path), "--report", "json"])
+
+    assert result.exit_code == 2
+    assert json.loads(result.stdout)["error"] == "manifest_invalid"

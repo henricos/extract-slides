@@ -354,12 +354,22 @@ table, not a history. Nothing deleted leaves a trace in it.
 slides[i] = { file, change_at, reason, rect, rect_rule, layout }
 ```
 
-Slide `i` is on screen for `[change_at[i], change_at[i+1])`, and the last runs to the media's
-duration. **Intervals are derived at read time, never stored.** This is the decision that
-dissolves three hard questions instead of answering them: deleting slide 7 is deleting the
-line, so the forward merge stops being a rule and becomes a property of the representation;
-the unassigned bucket becomes unreachable; and surviving two renumberings costs nothing
-because no second date exists to disagree.
+Slide `i` is on screen for `[change_at[i], change_at[i+1])`, the **first interval opens at
+zero** rather than at the first row, and the last runs to the media's duration. **Intervals
+are derived at read time, never stored.** This is the decision that dissolves two hard
+questions instead of answering them: the unassigned bucket becomes unreachable, and
+surviving two renumberings costs nothing because no second date exists to disagree.
+
+It dissolves **half** of a third. ADR 0009 claimed the forward merge (§10) came free with it;
+it does at the two ends and not in between. Deleting a row frees its span to the row *before*
+it, so deleting the opening slide merges forward — the first interval opens at zero — and
+deleting the closing slide merges backward, which is what is wanted when there is no next
+slide, while an interior deletion lands the speech on the previous slide. That is the case
+the merge rule is about. **The forward merge is a rule `drop` implements**, not a property,
+and the representation supports one mechanism for it: the surviving row's instant moves back
+over the captures deleted ahead of it.
+→ [ADR 0009, amendment 2026-09-26](adr/0009-the-output-contract-a-table-of-instants.md),
+[#33](https://github.com/henricos/extract-slides/issues/33)
 
 - **`change_at` is the slide's identity.** Numbers renumber on every `drop`; the instant does
   not. There is no invented id.
@@ -380,6 +390,18 @@ because no second date exists to disagree.
 URL, media duration, transcript origin (`asr-caption` / `human-caption` / `stt`) and fidelity
 (`word` / `cue`), the STT model where one ran, whether the crop ran, and the detection
 parameters.
+
+**It also records what each stage finished** — the instant, and the gist its reuse line
+prints. That is the resume state, and ADR 0002 puts it inside the output directory rather
+than in a global run index. Deriving completion from the artefacts instead fails on the case
+the header already anticipates: a crop that declined and a crop that never ran leave
+identical pixels, which is why "whether the crop ran" is a field at all.
+
+**The spelling is fixed**: a manifest is `{ schema_version, run, slides }`; the header is
+`tool_version`, `video_id`, `url`, `duration`, `transcript_origin`, `transcript_fidelity`,
+`stt_model`, `cropped`, `detection`, `stages`; a row is `file`, `change_at`, `reason`, `rect`
+(four normalised numbers, in the order `--roi` takes them), `rect_rule`, `layout`. `layout` is
+`null` on a row pass 1 wrote, because there is no cluster to name yet.
 
 **The speech is never in the manifest.** `presentation.md` is cut out of `transcript.json` by
 the derived intervals when it is written, and is **regenerated, never patched**.
@@ -436,7 +458,9 @@ so ignoring the stranger would silently discard a slide's `change_at` — its id
 
 **The speech of a deleted slide merges forward** into the next surviving slide, backward only
 when there is no next one. This corrects the intuitive answer: the crop keeps the *later* of
-two duplicates, so a build's orphans lie behind its survivor.
+two duplicates, so a build's orphans lie behind its survivor. It is **work `drop` has to do**:
+§9 records that the table of instants gives this away free at the two ends and not in the
+interior, which is the case the rule is about.
 
 ### The AI pass
 
@@ -518,9 +542,22 @@ extract-slides --version             # what self-update would be updating from
   problem never had.
 - **A stage command chains forward** into the stages that depend on it: `detect` re-runs `crop`
   and `pair`, `transcribe` re-runs `pair`, `crop` re-runs `pair` (because the crop deletes).
-  Only `pair` stops at itself.
-- **`--force` works per stage.** `--no-crop` and `--roi` (four normalised floats) are the
-  operator's escape hatches; `cv2.selectROI` is not used.
+  Only `pair` stops at itself. The chain is not written three times — each stage declares what
+  it needs finished before it can run, and the forward chain, resume and per-stage `--force`
+  are all read off that one graph.
+- **The default path and `fetch` resume; a stage command redoes the stage it names.** That
+  asymmetry is forced by `pair DIR`, which exists to be run after editing the transcript by
+  hand: a `pair` that reused its own record would do nothing on the one invocation it is for.
+  Resume state lives in the output directory, so a run given a URL resumes only once the
+  acquirer can resolve that URL to one.
+  A stage's block is headed by its position in the whole pipeline, so `crop DIR` opens at
+  `4/5` after three reuse lines.
+- **`--force` works per stage.** The granularity is the point: `crop DIR` recomputes the crop
+  and the pairing while reusing the download, the transcript and the detection, where
+  `extract-slides DIR --force` recomputes all five. On a stage command the flag is accepted
+  and adds nothing, because naming the stage already asked for it.
+- **`--no-crop` and `--roi`** (four normalised floats) are the operator's escape hatches;
+  `cv2.selectROI` is not used.
 - **`--force-stt` and `--model` are the transcribe stage's two overrides**, specified in §5
   and belonging to whichever commands transcribe. They are named here because this list is
   the enumerated surface, and a flag decided in another section but missing from this one is
@@ -674,8 +711,9 @@ and taken.
 The map decided *how to build the tool*. It deliberately did not decide these, and none of
 them is blocked on anything:
 
-- **Field names and JSON spelling** in `manifest.json` and `transcript.json`. The contract
-  fixes what is carried and what is derived; the keys are implementation.
+- ~~**Field names and JSON spelling** in `manifest.json`~~ — fixed by
+  [#26](https://github.com/henricos/extract-slides/issues/26) and recorded in §9. Still open
+  for `transcript.json`.
 - **The prompt and the structured output schema `prune` sends to the model.** The endpoint
   returns a list of numbers against a JSON schema natively.
 - **Which constants from §13 become CLI flags**, and their names.
@@ -683,8 +721,11 @@ them is blocked on anything:
   ADR 0002 fixes the *shape* of the output — block versus line, stdout versus stderr, panel
   versus log — not the wording. **Module boundaries were settled** by the build spec,
   [#24](https://github.com/henricos/extract-slides/issues/24): thirteen modules named by
-  responsibility, and two seams — the output directory entered through the CLI, and the
-  sampler — with the acquirer and the model client injected as the outside world.
+  responsibility — fourteen since
+  [#26](https://github.com/henricos/extract-slides/issues/26), which added **pipeline**, the
+  stage registry, because the dependency graph is logic and `cli` owns none — and two seams:
+  the output directory entered through the CLI, and the sampler, with the acquirer and the
+  model client injected as the outside world.
 - ~~**Test strategy.**~~ Also settled by [#24](https://github.com/henricos/extract-slides/issues/24),
   on the premise stated here: there is no metric and no ground truth, so there is nothing to
   assert an output against beyond the structural contract, and the six sweep fixtures are
