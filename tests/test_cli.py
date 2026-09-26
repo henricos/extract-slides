@@ -186,3 +186,20 @@ def test_an_interrupted_prompt_exits_without_a_traceback(cli):
     assert result.exit_code == 1
     assert "Traceback" not in result.stderr
     assert "Aborted" in result.stderr
+
+
+@pytest.mark.skip(reason="No command can succeed yet; #26 is the first that can.")
+def test_a_successful_run_under_json_puts_the_document_on_stdout(cli):
+    """The half of ADR 0002's two-stream rule that #25 could not prove here.
+
+    The split itself is asserted above, but over a *failure* document,
+    because every command in this build reports that it is not implemented
+    and exits 2. The success document's shape is covered directly against
+    the reporting module, with its streams injected, in `test_reporting.py`
+    — which proves the writer and not the wiring.
+
+    #26 is the first ticket whose commands finish, so it is the first that
+    can assert this the way the ADR states it: invoke a run that succeeds,
+    parse stdout whole, and find every human word on stderr. Write that
+    body and delete this marker.
+    """
