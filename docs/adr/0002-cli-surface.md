@@ -288,3 +288,29 @@ stage already asked for it. What "`--force` works per stage" describes is the *g
 and that part is real and is what the registry provides: `crop DIR` recomputes the crop and
 the pairing while reusing the download, the transcript and the detection, where
 `extract-slides DIR --force` recomputes all five.
+
+### 2026-09-28 — a URL resolves to its run
+
+From [#27](https://github.com/henricos/extract-slides/issues/27). The 2026-09-26 amendment
+left `fetch URL` and `extract-slides URL` unable to resume, because nothing yet resolved a URL
+to an output directory. The acquirer now does: it asks the platform for the video id and
+finds the directory an earlier run left **by that id**, not by its full name, because a title
+can be edited after a run and the id is what identifies the talk. Resuming from a URL
+therefore costs one metadata request to the platform even when every stage is reused.
+
+`--out` is live with it. A local video file as the target is refused by name, as not yet
+supported, rather than handed to the downloader to fail as a download error.
+
+A source that states no duration — a live stream, a page holding several videos — is refused
+by name too: every guard on time is measured against the media's duration, and a manifest
+cannot be written without one.
+
+**A stage that starts forgets its own record and every record built on it.** Found in review:
+`fetch URL --force` re-downloads and stops after `transcribe`, which left `detect`, `crop` and
+`pair` recorded as finished over a video that had been replaced, and the next run would have
+reused them. The registry already knows what is built on what, so the rule comes off the same
+graph: before a stage runs, its record and those of everything downstream of it are removed
+from the manifest, and written. Forgetting before running rather than after is what makes a
+stage that *fails* safe too — a transcribe that finds no usable caption leaves no transcribe
+record, and no `transcript.json`, for a later run to reuse.
+

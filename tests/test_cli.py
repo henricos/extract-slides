@@ -52,17 +52,20 @@ def test_help_shows_both_ways_of_invoking_the_tool(cli):
     assert "COMMAND [ARGS]..." in result.output
 
 
-def test_a_first_token_that_is_not_a_subcommand_is_the_target(cli):
+def test_a_first_token_that_is_not_a_subcommand_is_the_target(cli, tmp_path):
     result = cli.invoke(app, ["https://youtu.be/jqpdveK2XAU", "--report", "json"])
 
     document = json.loads(result.stdout)
-    assert document["target"] == "https://youtu.be/jqpdveK2XAU"
+    assert document["directory"].endswith("-jqpdveK2XAU"), "the URL was fetched as the target"
+    assert (tmp_path / document["directory"] / "source.mp4").is_file()
 
 
-def test_a_local_directory_is_a_target_too(cli):
-    result = cli.invoke(app, ["./out/a-talk-jqpdveK2XAU", "--report", "json"])
+def test_a_local_directory_is_a_target_too(cli, output_directory):
+    directory = output_directory()
 
-    assert json.loads(result.stdout)["target"] == "./out/a-talk-jqpdveK2XAU"
+    result = cli.invoke(app, [str(directory), "--report", "json"])
+
+    assert json.loads(result.stdout)["directory"] == str(directory)
 
 
 @pytest.mark.parametrize("command", STAGE_COMMANDS)
@@ -239,7 +242,7 @@ def test_force_on_the_default_path_reuses_nothing(cli, output_directory):
     assert result.exit_code == 2
     assert json.loads(result.stdout)["error"] == "not_implemented"
     assert "reused" not in result.stderr, "--force discards the whole run's work"
-    assert "acquire is not implemented" in result.stderr
+    assert "1/5  acquire" in result.stderr, "the download is redone too"
 
 
 def test_a_stage_command_reuses_what_comes_before_it(cli, output_directory):
@@ -255,12 +258,14 @@ def test_a_stage_command_reuses_what_comes_before_it(cli, output_directory):
 
 
 def test_the_stage_a_command_names_is_the_one_that_runs(cli, output_directory):
-    directory = str(output_directory())
-
-    for command in ["transcribe", "detect", "crop", "pair"]:
+    for position, command in enumerate(["transcribe", "detect", "crop", "pair"], start=2):
+        # A directory each: a stage that fails forgets what was built on it,
+        # so a shared one would have the next command redo the last one's stage.
+        directory = str(output_directory(f"run-for-{command}"))
         result = cli.invoke(app, [command, directory])
 
-        assert f"{command} is not implemented" in result.stderr
+        assert f"{position}/5  {command}" in result.stdout
+        assert f"{command}    reused" not in result.stdout, "the named stage is redone"
 
 
 def test_a_stage_command_pointed_at_a_directory_with_no_run_says_so(cli, tmp_path):

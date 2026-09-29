@@ -26,6 +26,7 @@ from enum import Enum
 from typing import Any, TextIO
 
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
@@ -49,17 +50,17 @@ class StageLog:
 
     def field(self, label: str, value: str) -> None:
         """One `label   value` row of the block."""
-        self._console.print(f"{INDENT}[dim]{label:<10}[/dim] {value}")
+        self._console.print(f"{INDENT}[dim]{label:<10}[/dim] {escape(value)}")
 
     def note(self, message: str, hint: str | None = None) -> None:
         """Something the operator should see but that is not a failure."""
-        self._console.print(f"{INDENT}[bold yellow]![/bold yellow] {message}")
+        self._console.print(f"{INDENT}[bold yellow]![/bold yellow] {escape(message)}")
         if hint:
-            self._console.print(f"{INDENT}  [dim]{hint}[/dim]")
+            self._console.print(f"{INDENT}  [dim]{escape(hint)}[/dim]")
 
     def done(self, message: str) -> None:
         """Closes the block."""
-        self._console.print(f"{INDENT}[green]✓[/green] [dim]{message}[/dim]")
+        self._console.print(f"{INDENT}[green]✓[/green] [dim]{escape(message)}[/dim]")
 
 
 class Reporter:
@@ -105,7 +106,7 @@ class Reporter:
             self._last_was_block = False
         self._narration.print(
             f"[dim]{position}/{of}[/dim]  {name:<11}[blue]reused[/blue]   "
-            f"[dim]{gist} · recompute with --force[/dim]"
+            f"[dim]{escape(gist)} · recompute with --force[/dim]"
         )
 
     def report(
@@ -153,9 +154,9 @@ class Reporter:
         of it should be defined in one place only.
         """
         if narrate:
-            self._err.print(f"\n[bold red]✗[/bold red] {message}")
+            self._err.print(f"\n[bold red]✗[/bold red] {escape(message)}")
             if hint:
-                self._err.print(f"  [dim]{hint}[/dim]")
+                self._err.print(f"  [dim]{escape(hint)}[/dim]")
         if self.format is ReportFormat.json:
             document: dict[str, Any] = {
                 "status": "error",

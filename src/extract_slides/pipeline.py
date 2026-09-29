@@ -62,6 +62,19 @@ DEPENDS_ON: dict[Stage, tuple[Stage, ...]] = {
 }
 
 
+def downstream(stage: Stage) -> tuple[Stage, ...]:
+    """Every stage built on `stage`'s work, directly or through another.
+
+    When a stage runs again, these describe work that no longer matches it:
+    a new download leaves the old detection describing a video that is gone.
+    """
+    built_on = {stage}
+    for later in ORDER[ORDER.index(stage) + 1 :]:
+        if any(dependency in built_on for dependency in DEPENDS_ON[later]):
+            built_on.add(later)
+    return tuple(later for later in ORDER if later in built_on and later is not stage)
+
+
 class StageNotImplemented(NotImplementedError):
     """A stage that has to run, in a build that cannot run it yet.
 

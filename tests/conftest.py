@@ -21,6 +21,7 @@ import pytest
 from typer.testing import CliRunner
 
 from extract_slides import __version__
+from extract_slides.acquirer import CaptionTrack, DownloaderError, Media, Source
 from extract_slides.manifest import (
     CaptureReason,
     Manifest,
@@ -34,6 +35,7 @@ from extract_slides.manifest import (
     slides_directory,
 )
 from extract_slides.pipeline import ORDER
+from json3 import asr_track
 
 #: Box-drawing characters. ADR 0001 bans them from `--help` and ADR 0002
 #: bans them from the running log, while the final report is the one place
@@ -55,9 +57,101 @@ def borders() -> set[str]:
     return _BORDERS
 
 
+class FakeAcquirer:
+    """The outside world, as seam 1 sees it: `yt-dlp` and the network, replaced.
+
+    The acquirer is an injected boundary (#24), so tests hand the CLI this
+    instead. It serves what a real source would — the tracks the platform
+    lists, the bytes each download writes — and records which caption tracks
+    were asked for, because "a machine-translated track is never requested" is
+    a promise about what crosses the boundary and can only be seen there.
+    """
+
+    def __init__(
+        self,
+        *,
+        video_id: str = "jqpdveK2XAU",
+        title: str = "Containers From Scratch | DevConf 2024",
+        duration: float = 40.0,
+        language: str | None = "en",
+        subtitles: dict[str, str] | None = None,
+        automatic: dict[str, str] | None = None,
+        failure: str | None = None,
+    ) -> None:
+        self.video_id = video_id
+        self.title = title
+        self.duration = duration
+        self.language = language
+        self.subtitles = dict(subtitles or {})
+        if automatic is None:
+            automatic = {
+                "en-orig": asr_track(
+                    duration,
+                    [(0.0, 12.0, "hello and welcome"), (12.0, 30.0, "containers are processes")],
+                )
+            }
+        self.automatic = dict(automatic)
+        self.failure = failure
+        #: What the downloaded file measures, where a test needs it to differ
+        #: from the platform's figure, which YouTube rounds to the second.
+        self.media_duration: float | None = None
+        self.requested: list[str] = []
+        self.media_downloads = 0
+
+    def probe(self, url: str) -> Source:
+        if self.failure:
+            raise DownloaderError(self.failure)
+        return Source(
+            video_id=self.video_id,
+            title=self.title,
+            url=url,
+            duration=self.duration,
+            language=self.language,
+            subtitles=tuple(self.subtitles),
+            automatic_captions=tuple(self.automatic),
+        )
+
+    def download_media(self, source: Source, directory: Path) -> Media:
+        self.media_downloads += 1
+        video = directory / VIDEO_FILENAME
+        audio = directory / "source.m4a"
+        video.write_bytes(b"not a video, and nothing opens it")
+        audio.write_bytes(b"not audio either")
+        return Media(video=video, audio=audio, duration=self.media_duration or self.duration)
+
+    def download_caption(self, source: Source, track: CaptionTrack, destination: Path) -> None:
+        self.requested.append(track.key)
+        served = self.subtitles if track.human else self.automatic
+        destination.write_text(served[track.key], encoding="utf-8")
+
+
+class Runner(CliRunner):
+    """`CliRunner` that hands every invocation the fake acquirer.
+
+    Injected as click's context object, so no test reaches the network by
+    forgetting to ask for the fake: the suite never downloads (#24).
+    """
+
+    def __init__(self, acquirer: FakeAcquirer) -> None:
+        super().__init__()
+        self.acquirer = acquirer
+
+    def invoke(self, cli, args=None, **kwargs):
+        kwargs.setdefault("obj", self.acquirer)
+        return super().invoke(cli, args, **kwargs)
+
+
 @pytest.fixture
-def cli() -> CliRunner:
-    return CliRunner()
+def acquirer() -> FakeAcquirer:
+    return FakeAcquirer()
+
+
+@pytest.fixture
+def cli(acquirer: FakeAcquirer, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Runner:
+    # `--out` defaults to ./out, so every invocation runs inside the test's own
+    # directory rather than leaving output behind in the repository.
+    monkeypatch.chdir(tmp_path)
+    return Runner(acquirer)
 
 
 def _write_slide_image(path: Path, shade: int) -> None:
@@ -123,15 +217,20 @@ def output_directory(tmp_path: Path):
                 zip([*instants], [*instants[1:], duration], strict=True), start=1
             )
         ]
-        # A placeholder, not the contract: the normalised transcript shape is
-        # #27's to fix, and nothing in this ticket reads these two files.
+        # The raw caption acquire would have left, so `transcribe DIR` has
+        # something to redo the transcript from without a download.
+        (directory / "caption.asr.en-orig.json3").write_text(
+            asr_track(duration, [(c["start"], c["end"], c["text"]) for c in cues]),
+            encoding="utf-8",
+        )
         (directory / "transcript.json").write_text(
             json.dumps(
                 {
                     "origin": TranscriptOrigin.asr_caption.value,
-                    "fidelity": TranscriptFidelity.cue.value,
+                    "fidelity": TranscriptFidelity.word.value,
                     "duration": duration,
-                    "cues": cues,
+                    "source": "caption.asr.en-orig.json3",
+                    "cues": [{**cue, "words": []} for cue in cues],
                 },
                 indent=2,
             )

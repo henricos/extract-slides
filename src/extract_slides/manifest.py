@@ -28,6 +28,8 @@ global run index, and this file is the output directory's record of itself.
 from __future__ import annotations
 
 import json
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -41,6 +43,27 @@ from extract_slides import constants
 MANIFEST_FILENAME = "manifest.json"
 SLIDES_DIRNAME = "slides"
 SLIDE_SUFFIX = ".jpg"
+TRANSCRIPT_JSON_FILENAME = "transcript.json"
+TRANSCRIPT_MD_FILENAME = "transcript.md"
+
+#: The source media. Both are kept: the crop re-decodes the video (ADR 0006),
+#: and the audio is what local transcription reads, so `transcribe DIR` never
+#: has to go back to the network. They are two files because the platform
+#: serves the best video without sound, and joining them needs `ffmpeg`, which
+#: the tool does not carry (ADR 0010).
+VIDEO_FILENAME = "source.mp4"
+AUDIO_STEM = "source"
+
+#: Raw captions are kept beside the transcript as `caption.<kind>.<track>.json3`,
+#: so that a pairing that looks wrong can be traced to the parser or to the
+#: caption without downloading it again (ADR 0009). The kind is in the name
+#: because the order transcribe tries them in — human first — is read off it.
+CAPTION_PREFIX = "caption"
+CAPTION_SUFFIX = ".json3"
+
+#: How much of a talk's title goes into its directory name. Enough to tell two
+#: talks apart in a file manager; the video id after it is what is unique.
+SLUG_MAX_LENGTH = 60
 
 #: Bumped when a field changes meaning rather than when one is added. A reader
 #: that finds a number it does not know stops rather than guessing, because the
@@ -424,6 +447,10 @@ class Manifest:
         """Mark a stage finished. This is the state a later run resumes from."""
         self.run.stages[name] = StageRecord(gist=gist, completed_at=_now())
 
+    def forget_stage(self, name: str) -> None:
+        """Unmark a stage, so no later run reuses work that no longer stands."""
+        self.run.stages.pop(name, None)
+
 
 def slide_number_width(count: int) -> int:
     """Fixed width, floored at three digits, widening only past 999.
@@ -444,6 +471,45 @@ def slide_filename(number: int, *, of: int) -> str:
 
 def slides_directory(directory: Path) -> Path:
     return directory / SLIDES_DIRNAME
+
+
+def slugify(title: str) -> str:
+    """A title as a directory name: lowercase ASCII words joined by hyphens.
+
+    Accents are folded rather than dropped, so "Visão" becomes "visao"; a
+    character with no ASCII form is dropped. The cut falls between words.
+    """
+    folded = unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode()
+    words = re.findall(r"[a-z0-9]+", folded.lower())
+    slug = ""
+    for word in words:
+        candidate = f"{slug}-{word}" if slug else word
+        if len(candidate) > SLUG_MAX_LENGTH:
+            break
+        slug = candidate
+    return slug
+
+
+def run_directory_name(title: str, video_id: str) -> str:
+    """`<slug>-<video-id>`, ADR 0002's name for an output directory."""
+    slug = slugify(title)
+    return f"{slug}-{video_id}" if slug else video_id
+
+
+def find_run(parent: Path, video_id: str) -> Path | None:
+    """The output directory an earlier run left for this video, if any.
+
+    Found by the video id rather than by the whole name, because the id is
+    what identifies the talk and a title can be edited after the run.
+    """
+    if not parent.is_dir():
+        return None
+    for candidate in sorted(parent.iterdir()):
+        if not candidate.is_dir() or not Manifest.path_in(candidate).exists():
+            continue
+        if candidate.name == video_id or candidate.name.endswith(f"-{video_id}"):
+            return candidate
+    return None
 
 
 def _now() -> str:

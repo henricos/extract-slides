@@ -32,8 +32,15 @@ from typing import Any, NoReturn
 
 import typer
 
-from extract_slides import __version__, pipeline
-from extract_slides.manifest import Manifest, ManifestError
+from extract_slides import __version__, pipeline, transcriber
+from extract_slides.acquirer import (
+    Acquirer,
+    DownloaderError,
+    Source,
+    YtDlpAcquirer,
+    acquire,
+)
+from extract_slides.manifest import Manifest, ManifestError, RunHeader, find_run, run_directory_name
 from extract_slides.pipeline import Stage
 from extract_slides.reporting import ReportFormat, Reporter, StageLog
 
@@ -212,21 +219,83 @@ def _not_implemented_yet(reporter: Reporter, what: str, **details: str) -> NoRet
     reporter.failure(
         f"{what} is not implemented yet.",
         code="not_implemented",
-        hint="This build carries the output directory and the stage registry; "
-        "the stages themselves are not in it yet.",
+        hint="This build downloads and transcribes from the platform's captions; "
+        "the stages after that are not in it yet.",
         details=details,
     )
     raise typer.Exit(code=EXIT_FAILURE)
 
 
-def _no_stage_yet(stage: Stage, log: StageLog) -> str:
-    """The stage runner this build hands the registry.
+def _acquirer(ctx: typer.Context) -> Acquirer:
+    """The acquirer this invocation uses: `yt-dlp`, unless one was injected.
 
-    Every stage is registered and every stage refuses. What the registry then
-    does around that refusal — which stages it reused first, which it would
-    have chained into — is the part this build is here to get right.
+    The acquirer is the outside world (#24), so the suite passes a fake as
+    click's context object and the tool never reaches the network under test.
     """
-    raise pipeline.StageNotImplemented(stage)
+    return ctx.obj if ctx.obj is not None else YtDlpAcquirer()
+
+
+def _downloader_failed(reporter: Reporter, error: DownloaderError, **details: str) -> NoReturn:
+    """A download failure, named as one.
+
+    The downloader is the one dependency that floats, because it breaks when
+    the platform changes and the breakage is total (ADR 0010). So the message
+    says which program failed and what fixes it, rather than handing the
+    operator an HTTP status to debug.
+    """
+    reporter.failure(
+        f"The downloader (yt-dlp) failed: {error}",
+        code="download_failed",
+        hint="The platform changes often and yt-dlp follows it. "
+        f"Run {PROG} self-update --yt-dlp, then try again.",
+        details=details,
+    )
+    raise typer.Exit(code=EXIT_FAILURE)
+
+
+def _resolve(
+    reporter: Reporter, acquirer: Acquirer, target: str, output: Path
+) -> tuple[Path, Source | None]:
+    """Turn what the operator typed into an output directory with a manifest.
+
+    A directory is a run already. A URL is resolved through the acquirer to
+    the video it names, and from the video id to the directory an earlier run
+    left — which is what lets `fetch URL` resume — or to a new one.
+    """
+    path = Path(target)
+    if path.is_dir():
+        return path, None
+    if path.is_file():
+        _not_implemented_yet(reporter, "Reading a local video file", target=target)
+    try:
+        source = acquirer.probe(target)
+    except DownloaderError as error:
+        _downloader_failed(reporter, error, target=target)
+    if source.duration <= 0:
+        # The media's duration is the authority on time and every guard is
+        # measured against it; a source that states none is a live stream or a
+        # page that is not one recorded video.
+        reporter.failure(
+            f"{target} states no duration, so it is not one recorded video.",
+            code="no_duration",
+            hint="Live streams and pages holding several videos cannot be fetched.",
+            details={"target": target},
+        )
+        raise typer.Exit(code=EXIT_FAILURE)
+
+    directory = find_run(output, source.video_id) or output / run_directory_name(
+        source.title, source.video_id
+    )
+    if not Manifest.path_in(directory).exists():
+        Manifest(
+            run=RunHeader(
+                tool_version=__version__,
+                duration=source.duration,
+                video_id=source.video_id,
+                url=source.url,
+            )
+        ).write(directory)
+    return directory, source
 
 
 def _existing_run(reporter: Reporter, directory: Path) -> Manifest:
@@ -260,50 +329,77 @@ def _existing_run(reporter: Reporter, directory: Path) -> Manifest:
 def _run_pipeline(
     reporter: Reporter,
     *,
-    directory: Path | None,
+    directory: Path,
+    acquirer: Acquirer,
+    source: Source | None = None,
     invalidated: Sequence[Stage] = (),
     through: Stage | None = None,
-    target: str | None = None,
 ) -> None:
     """Plan the run, walk it, and report — the one path every command takes.
-
-    `directory` is `None` when there is no run yet, which is every invocation
-    that starts from a URL. Nothing is then recorded as finished, so the plan
-    begins at `acquire`, which is the right answer for a target nobody has
-    fetched.
 
     Each stage is recorded as it finishes rather than at the end of the walk,
     so a run that fails at stage four keeps what the first three did.
     """
-    document = _existing_run(reporter, directory) if directory else None
+    document = _existing_run(reporter, directory)
 
     def record(stage: Stage, gist: str) -> None:
-        if document is None or directory is None:
-            return
         document.record_stage(stage.value, gist)
         document.write(directory)
 
-    completed = pipeline.completed_from(document.completed_stages()) if document else {}
+    def run_stage(stage: Stage, log: StageLog) -> str:
+        # Whatever this stage and everything built on it recorded is stale from
+        # the moment it starts. Forgotten before running, not after, so a stage
+        # that fails leaves nothing behind that a later run would reuse.
+        for stale in (stage, *pipeline.downstream(stage)):
+            document.forget_stage(stale.value)
+        document.write(directory)
+        return _run(stage, log)
+
+    def _run(stage: Stage, log: StageLog) -> str:
+        nonlocal source
+        if stage is Stage.acquire:
+            if source is None:
+                source = acquirer.probe(document.run.url or "")
+            acquired = acquire(acquirer, source, directory, log)
+            document.run.duration = acquired.duration
+            return acquired.gist
+        if stage is Stage.transcribe:
+            transcript = transcriber.transcribe(
+                directory, duration=document.run.duration, log=log
+            )
+            document.run.transcript_origin = transcript.origin
+            document.run.transcript_fidelity = transcript.fidelity
+            document.run.stt_model = None
+            gist = f"{transcript.source}, {len(transcript.cues)} cues"
+            log.done(gist)
+            return gist
+        raise pipeline.StageNotImplemented(stage)
+
+    completed = pipeline.completed_from(document.completed_stages())
     steps = pipeline.plan(completed=completed, invalidated=invalidated, through=through)
     try:
-        pipeline.execute(
-            steps, reporter=reporter, run_stage=_no_stage_yet, on_complete=record
-        )
+        pipeline.execute(steps, reporter=reporter, run_stage=run_stage, on_complete=record)
+    except DownloaderError as error:
+        _downloader_failed(reporter, error, directory=str(directory))
     except pipeline.StageNotImplemented as error:
-        details = {"directory": str(directory)} if directory else {"target": target or ""}
-        _not_implemented_yet(reporter, error.stage.value, **details)
+        _not_implemented_yet(reporter, error.stage.value, directory=str(directory))
+    except transcriber.NoUsableCaption:
+        reporter.failure(
+            "No usable caption, and local transcription is not in this build yet.",
+            code="not_implemented",
+            hint="This build transcribes from the platform's captions only.",
+            details={"directory": str(directory)},
+        )
+        raise typer.Exit(code=EXIT_FAILURE)
 
-    slides = len(document.slides) if document else 0
-    rows = [("slides", str(slides))]
-    if directory:
-        rows.append(("output", str(directory)))
+    rows = [("slides", str(len(document.slides))), ("output", str(directory))]
     reporter.report(
         rows=rows,
         payload={
             "status": "ok",
-            "directory": str(directory) if directory else None,
-            "slides": slides,
-            "duration": document.run.duration if document else None,
+            "directory": str(directory),
+            "slides": len(document.slides),
+            "duration": document.run.duration,
             "stages": {
                 step.stage.value: "reused" if step.reused else "ran" for step in steps
             },
@@ -311,9 +407,11 @@ def _run_pipeline(
     )
 
 
-def _redo(report: ReportFormat, directory: Path, stage: Stage) -> None:
+def _redo(ctx: typer.Context, report: ReportFormat, directory: Path, stage: Stage) -> None:
     """Every stage command: name a stage to redo, and chain forward from it."""
-    _run_pipeline(Reporter(report), directory=directory, invalidated=(stage,))
+    _run_pipeline(
+        Reporter(report), directory=directory, acquirer=_acquirer(ctx), invalidated=(stage,)
+    )
 
 
 def _version(value: bool) -> None:
@@ -337,6 +435,7 @@ def root(
 
 @app.command(DEFAULT_COMMAND, hidden=True)
 def default_path(
+    ctx: typer.Context,
     target: str = typer.Argument(
         ...,
         metavar="URL | DIR",
@@ -349,16 +448,21 @@ def default_path(
     report: ReportFormat = REPORT,
 ) -> None:
     """Run every stage, resuming whatever an earlier run already finished."""
+    reporter = Reporter(report)
+    acquirer = _acquirer(ctx)
+    directory, source = _resolve(reporter, acquirer, target, output)
     _run_pipeline(
-        Reporter(report),
-        directory=Path(target) if Path(target).is_dir() else None,
+        reporter,
+        directory=directory,
+        acquirer=acquirer,
+        source=source,
         invalidated=pipeline.ORDER if force else (),
-        target=target,
     )
 
 
 @app.command()
 def fetch(
+    ctx: typer.Context,
     url: str = typer.Argument(
         ..., metavar="URL", help="A video URL or a local video file."
     ),
@@ -367,21 +471,22 @@ def fetch(
     report: ReportFormat = REPORT,
 ) -> None:
     """Step 1: download the video and produce the transcript."""
-    # `directory=None` because resolving a URL to an output directory is the
-    # acquirer's job (#27), so there is nothing here to read a manifest from
-    # yet. Until then `fetch` cannot resume what an earlier `fetch` finished,
-    # although the surface says it does.
+    reporter = Reporter(report)
+    acquirer = _acquirer(ctx)
+    directory, source = _resolve(reporter, acquirer, url, output)
     _run_pipeline(
-        Reporter(report),
-        directory=None,
+        reporter,
+        directory=directory,
+        acquirer=acquirer,
+        source=source,
         invalidated=(Stage.acquire,) if force else (),
         through=Stage.transcribe,
-        target=url,
     )
 
 
 @app.command()
 def transcribe(
+    ctx: typer.Context,
     directory: Path = DIRECTORY,
     force: bool = FORCE,
     report: ReportFormat = REPORT,
@@ -391,11 +496,12 @@ def transcribe(
     The video and the raw caption stay where they are, so this costs
     the transcription and nothing else.
     """
-    _redo(report, directory, Stage.transcribe)
+    _redo(ctx, report, directory, Stage.transcribe)
 
 
 @app.command()
 def detect(
+    ctx: typer.Context,
     directory: Path = DIRECTORY,
     force: bool = FORCE,
     report: ReportFormat = REPORT,
@@ -406,11 +512,12 @@ def detect(
     have to follow it rather than be left describing images that are no
     longer there.
     """
-    _redo(report, directory, Stage.detect)
+    _redo(ctx, report, directory, Stage.detect)
 
 
 @app.command()
 def crop(
+    ctx: typer.Context,
     directory: Path = DIRECTORY,
     force: bool = FORCE,
     no_crop: bool = NO_CROP,
@@ -424,11 +531,12 @@ def crop(
     that video still in the output directory. It deletes duplicates the
     first test could not see, which is why it re-runs pair.
     """
-    _redo(report, directory, Stage.crop)
+    _redo(ctx, report, directory, Stage.crop)
 
 
 @app.command()
 def pair(
+    ctx: typer.Context,
     directory: Path = DIRECTORY,
     force: bool = FORCE,
     report: ReportFormat = REPORT,
@@ -439,7 +547,7 @@ def pair(
     no stored assignment to redo: the manifest holds an instant per
     slide and every interval is derived at read time.
     """
-    _redo(report, directory, Stage.pair)
+    _redo(ctx, report, directory, Stage.pair)
 
 
 @app.command()

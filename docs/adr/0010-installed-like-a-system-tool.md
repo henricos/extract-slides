@@ -304,3 +304,32 @@ because credentials happen to exist.
   here forbids the others; nothing here verified them either.
 - **How often anyone actually runs `self-update`.** The mechanism is decided; the cadence is
   the operator's.
+
+## Amendments
+
+### 2026-09-28 — the video and the audio are two files
+
+From [#27](https://github.com/henricos/extract-slides/issues/27), while building the acquirer.
+
+**`acquire` downloads two files: `source.mp4` and `source.m4a`.** YouTube serves its best video
+without sound, and joining the two streams is a job for `ffmpeg`, which this decision keeps
+off the prerequisite list. So the video is fetched alone — the best up to 1080p, as MP4,
+preferring H.264, because every fixture the OpenCV wheel was measured decoding was H.264 in
+MP4 — and the audio beside it as format 140, which the PyAV wheel inside `faster-whisper` was
+measured reading. The fixture cache the spikes used was built the same way, a video-only file
+and a separate `m4a`, so this is the measured shape rather than a new one.
+
+The audio is fetched on every run, although the caption path never reads it. The rejected
+alternative was fetching it only when transcription falls through to speech-to-text, which
+would put the network inside `transcribe DIR` — the command that exists to redo the
+transcript *without* downloading — and inside `--force-stt`. Tens of megabytes for a 45-minute
+talk is the price of keeping every stage after `acquire` offline.
+
+**The media's own duration replaces the platform's.** `yt-dlp` reports whole seconds on
+YouTube; the header of the downloaded file does not round. [ADR 0007](0007-transcribe-with-small-and-trust-the-media-clock.md)
+makes the media's duration the authority on time, and the caption guard is two seconds wide,
+so a rounding of up to half a second is not noise there.
+
+**`yt-dlp` is imported, never run.** Driving it as a library is what makes "never the binary
+on the PATH" true by construction: the import resolves inside the tool's own environment.
+

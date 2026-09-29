@@ -136,6 +136,15 @@ tool that used the host's copy would fail on every video with an error pointing 
 
 - **The version floats and `self-update --yt-dlp` moves it alone.** 17 YouTube-touching
   releases in 12 months; the failure mode is total, not degraded.
+- **Two files come down: `source.mp4` and `source.m4a`.** YouTube serves its best video without
+  sound and joining streams needs `ffmpeg`, which is not a prerequisite. The video is the best
+  up to 1080p as MP4, preferring H.264 (what the OpenCV wheel was measured decoding); the
+  audio is format 140. The audio is fetched even on the caption path, so `transcribe DIR` and
+  `--force-stt` never go back to the network.
+  → [ADR 0010, amendment 2026-09-28](adr/0010-installed-like-a-system-tool.md)
+- **The media's own duration replaces the platform's**, which YouTube rounds to the second.
+- **`yt-dlp` is imported as a library, never run as a program** — which is what makes "never
+  the PATH binary" true by construction.
 - **The source video stays in the output directory.** There is no input cache. The crop needs
   to re-decode the video, so it has to be there anyway, and a shared cache would only serve a
   second output directory for the same video — spike work, not use.
@@ -157,7 +166,14 @@ attempts hit HTTP 429.
 
 **Track selection follows the audio language `yt-dlp` reports** — the `-orig` track of the
 original audio — falling through to local STT when that is absent or ambiguous. There is no
-`--lang` flag; `--force-stt` is the override.
+`--lang` flag; `--force-stt` is the override. With no language reported, a single `-orig`
+track names it; with none and several `-orig` tracks, no caption is requested.
+
+**A human caption in the audio language is tried first, then the ASR original**, each against
+the duration guard below. Both are fetched and kept as `caption.<human|asr>.<track>.json3`.
+Human first because it is the text the operator reads; it costs word timings in
+`transcript.json`, and the ASR file on disk keeps them.
+→ [ADR 0009, amendment 2026-09-28](adr/0009-the-output-contract-a-table-of-instants.md)
 
 ### Local STT
 
@@ -342,7 +358,9 @@ free — but a cue split at a boundary produces two fragments that each read as 
   transcript.md      prose in paragraphs, no timestamps
   transcript.json    one normalised shape across the three origins, word timings kept
   slides/001.jpg …
-  <the source video, and the raw caption or STT output>
+  source.mp4         the video, kept for the crop's second decode
+  source.m4a         the audio, kept for local transcription
+  caption.<human|asr>.<track>.json3   each raw caption fetched, or the raw STT output
 ```
 
 **`manifest.json` describes what is in `slides/` now, and nothing else.** A current-state
@@ -415,6 +433,11 @@ bet fails.
 **Numbering is fixed-width with a floor of three digits**, widening only past 999. Do not copy
 the adaptive width that rewrites every filename when the count crosses a power of ten.
 
+**`transcript.json` is `{ origin, fidelity, duration, source, cues }`**, each cue
+`{ start, end, text, words }` and each word `{ start, end, text }`. Where the origin gives only
+onsets — an ASR `json3` track — a word ends where the next starts and the last where its cue
+does; `words` is empty on a cue-timed origin.
+
 **Word timings are kept wherever the origin has them** — the contract's only irreversible loss
 if dropped. Nothing in the pipeline uses them; they arrive free from both the ASR caption
 (`tOffsetMs` at 1 ms) and `faster-whisper`, cues can be derived from words and not the
@@ -422,8 +445,10 @@ reverse, and regenerating them means transcribing the talk again.
 
 **The raw caption or STT output stays on disk.** `json3` carries quirks a parser must survive
 — roughly half the events are rolling-window scroll markers, event 0 is a caption window
-spanning the whole video, some events have no duration — and human tracks open with non-speech
-metadata lines. When a pairing looks wrong, the question is whether the parser erred or the
+spanning the whole video, some events have no duration (such a cue ends where the next speech
+starts, or at its own last word), a one-word ASR event carries no word offset at all (word
+timing is a property of the track, not of the event) — and human tracks open with non-speech
+metadata lines ("Transcriber: …", dropped only at the start of a track). When a pairing looks wrong, the question is whether the parser erred or the
 caption is like that, and without the raw file that costs a re-download.
 
 ---
@@ -548,10 +573,13 @@ extract-slides --version             # what self-update would be updating from
 - **The default path and `fetch` resume; a stage command redoes the stage it names.** That
   asymmetry is forced by `pair DIR`, which exists to be run after editing the transcript by
   hand: a `pair` that reused its own record would do nothing on the one invocation it is for.
-  Resume state lives in the output directory, so a run given a URL resumes only once the
-  acquirer can resolve that URL to one.
+  Resume state lives in the output directory; a URL is resolved to its run by the video id,
+  at the cost of one metadata request even when every stage is reused.
   A stage's block is headed by its position in the whole pipeline, so `crop DIR` opens at
   `4/5` after three reuse lines.
+- **A stage that starts forgets its own record and every record built on it**, before it runs,
+  so neither a re-download nor a failed stage leaves later work marked as reusable.
+  → [ADR 0002, amendment 2026-09-28](adr/0002-cli-surface.md)
 - **`--force` works per stage.** The granularity is the point: `crop DIR` recomputes the crop
   and the pairing while reusing the download, the transcript and the detection, where
   `extract-slides DIR --force` recomputes all five. On a stage command the flag is accepted
@@ -712,8 +740,8 @@ The map decided *how to build the tool*. It deliberately did not decide these, a
 them is blocked on anything:
 
 - ~~**Field names and JSON spelling** in `manifest.json`~~ — fixed by
-  [#26](https://github.com/henricos/extract-slides/issues/26) and recorded in §9. Still open
-  for `transcript.json`.
+  [#26](https://github.com/henricos/extract-slides/issues/26) and, for `transcript.json`, by
+  [#27](https://github.com/henricos/extract-slides/issues/27); both recorded in §9.
 - **The prompt and the structured output schema `prune` sends to the model.** The endpoint
   returns a list of numbers against a JSON schema natively.
 - **Which constants from §13 become CLI flags**, and their names.

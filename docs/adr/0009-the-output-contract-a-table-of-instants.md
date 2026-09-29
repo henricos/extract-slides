@@ -358,3 +358,38 @@ the row, is the thing this ADR exists to refuse: two facts that can disagree, th
 that renumbers twice. [#33](https://github.com/henricos/extract-slides/issues/33) chooses;
 [#26](https://github.com/henricos/extract-slides/issues/26) records that the choice is real
 and was not made here, and pins the behaviour with a test so it cannot be assumed away again.
+
+### 2026-09-28 — which caption wins, and the spelling of `transcript.json`
+
+From [#27](https://github.com/henricos/extract-slides/issues/27), while building the caption
+path this ADR specifies.
+
+**A human caption in the audio language is tried before the ASR original.** The rule above
+says the track "follows the audio language `yt-dlp` reports — the `-orig` track", and says
+nothing about a video that carries both kinds in that language. `C38xlWnkezQ` does: a human
+`pt-BR` and the ASR `pt-orig`. The human one is chosen because it is what the operator reads,
+and [ADR 0007](0007-transcribe-with-small-and-trust-the-media-clock.md) used human captions as
+the reference its error rates were measured against. What it costs is word timings, which
+this ADR calls the contract's only irreversible loss; the cost is bounded because the ASR
+track is fetched too and kept on disk as `caption.asr.<track>.json3`, so the words are not
+gone, only not in `transcript.json`. The rejected alternative was ASR first, keeping the
+words in the transcript at the price of worse text in the one file the operator reads. Both
+tracks pass the same duration guard, in that order: a human caption carrying another talk is
+rejected and the ASR one is used, and only when neither survives does the run fall through to
+local speech-to-text.
+
+With no audio language reported and no single `-orig` track to read one from, no caption is
+requested at all. `b9dBJnQ_kpo` is that case today: `yt-dlp` reports no language and lists a
+human `en` track — the very one that runs 376 s past its video.
+
+**`transcript.json` is spelled** `{ origin, fidelity, duration, source, cues }`, with
+`origin` and `fidelity` as the manifest spells them, `duration` the media's, `source` the raw
+file the cues came from, and each cue `{ start, end, text, words }`. A word is
+`{ start, end, text }`. Where the origin states only onsets — an ASR `json3` track — a word
+ends where the next starts and the last where its cue does. `words` is empty on an origin
+with cue timings only.
+
+**Word timing is a property of the track, not of the event.** YouTube omits the first word's
+offset, so a one-word ASR cue carries no `tOffsetMs` at all; judged per event it would lose
+its word. The committed fixture `tests/fixtures/captions/jqpdveK2XAU.en-orig.json3` found
+this, which is the case for having committed it.
