@@ -114,17 +114,23 @@ def test_a_usage_error_under_text_leaves_stdout_empty(cli):
     assert result.stdout == ""
 
 
-def test_a_failure_exits_two_and_says_so_on_stderr(cli):
+# A download failure stands in for any failed run: it is the one that does
+# not move as the pipeline grows, where "the next stage is not built yet" did.
+
+
+def test_a_failure_exits_two_and_says_so_on_stderr(cli, acquirer):
+    acquirer.failure = "HTTP Error 403: Forbidden"
     result = cli.invoke(app, ["https://youtu.be/jqpdveK2XAU"])
 
     assert result.exit_code == 2
-    assert "not implemented" in result.stderr.lower()
-    assert "not implemented" not in result.stdout.lower(), (
+    assert "403" in result.stderr
+    assert "403" not in result.stdout, (
         "under text the running log owns stdout, but an error is never part of it"
     )
 
 
-def test_a_failure_under_json_writes_a_machine_readable_object(cli):
+def test_a_failure_under_json_writes_a_machine_readable_object(cli, acquirer):
+    acquirer.failure = "HTTP Error 403: Forbidden"
     result = cli.invoke(app, ["https://youtu.be/jqpdveK2XAU", "--report", "json"])
 
     assert result.exit_code == 2
@@ -132,7 +138,7 @@ def test_a_failure_under_json_writes_a_machine_readable_object(cli):
     assert document["status"] == "error"
     assert document["error"]
     assert document["message"]
-    assert "not implemented" in result.stderr.lower(), "narration is on stderr under json"
+    assert "403" in result.stderr, "narration is on stderr under json"
 
 
 def test_no_arguments_prints_help_rather_than_guessing(cli):
@@ -239,8 +245,8 @@ def test_a_successful_run_ends_in_the_one_bordered_panel(cli, output_directory, 
 def test_force_on_the_default_path_reuses_nothing(cli, output_directory):
     result = cli.invoke(app, [str(output_directory()), "--force", "--report", "json"])
 
+    # The run cannot finish in this build; what it reused on the way is the point.
     assert result.exit_code == 2
-    assert json.loads(result.stdout)["error"] == "not_implemented"
     assert "reused" not in result.stderr, "--force discards the whole run's work"
     assert "1/5  acquire" in result.stderr, "the download is redone too"
 

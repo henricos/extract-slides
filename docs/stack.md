@@ -14,9 +14,13 @@ measurement.
 Implementation began with [#25](https://github.com/henricos/extract-slides/issues/25) and
 has reached the package and the CLI shell: the pinned dependency set of §3, the surface of
 §11 with every command present, the constants of §13 in one module, and the output shape of
-§11 in another. **No pipeline stage exists yet** — every command reports that and exits.
-Besides that, what exists is six throwaway spikes, on branches, that measured the numbers
-quoted here.
+§11 in another. **Three stages exist**: acquire and transcribe from the platform's caption
+([#27](https://github.com/henricos/extract-slides/issues/27)), and detect
+([#28](https://github.com/henricos/extract-slides/issues/28)), which reproduces §6's
+measurement on all six sweep fixtures — the same 241 images, by the same reasons. The
+crop, the pairing, local transcription and pass 2 are not built yet; a run that reaches one
+names it and exits. Besides that, what exists is six throwaway spikes, on branches, that
+measured the numbers quoted here.
 
 ---
 
@@ -261,6 +265,14 @@ slide-frame gate. `min_scene_len` and its relatives are miss generators and ther
 dropped below **0.02 of differing bits** — always a fraction of bits, never a raw Hamming
 count. Compared against **every** image already kept, not just the previous one, which is what
 absorbs a camera cutting away from the slide and back.
+
+**Three readings the implementation carries from the spike**, because they are what was
+measured and the ADR does not spell them out. The watchdog counts from the sample at which
+the last capture was *emitted*, not from that capture's own instant; an emission that the
+duplicate test then drops still resets it, since the same screen is already kept; and the
+hash leaves out the DCT's DC term, so 255 of the 256 bits are compared — the threshold is a
+fraction, so the difference does not move it. `detect` reproduces ADR 0005's table exactly
+on all six fixtures (#28).
 
 Measured over the six sweep fixtures — 45 min 55 s of video — **241 images, roughly five per
 minute, at 6 % of real time**. Verified the way ADR 0004 says to verify: the operator reviewed
@@ -664,6 +676,7 @@ published to PyPI, which stays available later without rework.
 | `prune` image size | 680 px long edge | prune | [0008](adr/0008-the-deletion-pass-two-ways-to-name-the-surplus.md) |
 | `prune` max tokens | 65 536 | prune | [0008](adr/0008-the-deletion-pass-two-ways-to-name-the-surplus.md) |
 | slide numbering | 3 digits, widening past 999 | output | [0009](adr/0009-the-output-contract-a-table-of-instants.md) |
+| JPEG quality | 92 | output | [0009](adr/0009-the-output-contract-a-table-of-instants.md) |
 
 **None of these was tuned against a score, and none can be** — there is no metric. Where a
 constant had to be chosen, it was chosen toward over-capture. Whether any of them becomes a

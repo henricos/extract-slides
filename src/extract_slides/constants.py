@@ -119,6 +119,11 @@ PRUNE_MAX_TOKENS = 65_536
 #: 999.
 SLIDE_NUMBER_MIN_DIGITS = 3
 
+#: JPEG quality every slide image is written at. Both spikes wrote at 92, and
+#: ADR 0009's 143 KB an image — 29 MB for a 45-minute talk against PNG's
+#: 202 MB — was measured on what they wrote.
+JPEG_QUALITY = 92
+
 
 #: Which ADR chose each value above. The section comments say the same
 #: thing for a reader; this says it for the test, which walks the mapping
@@ -148,4 +153,5 @@ ADR_BY_CONSTANT: dict[str, str] = {
     "PRUNE_IMAGE_LONG_EDGE_PX": "ADR 0008",
     "PRUNE_MAX_TOKENS": "ADR 0008",
     "SLIDE_NUMBER_MIN_DIGITS": "ADR 0009",
+    "JPEG_QUALITY": "ADR 0009",
 }

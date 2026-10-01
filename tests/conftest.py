@@ -211,10 +211,13 @@ def output_directory(tmp_path: Path):
                 _write_slide_image(slides_directory(directory) / slide.file, 40 * offset)
 
         (directory / VIDEO_FILENAME).write_bytes(b"not a video, and nothing opens it")
+        # A run that has not detected yet has no slides, and its speech is
+        # then one cue over the whole media.
+        starts = list(instants) or [0.0]
         cues = [
             {"start": start, "end": end, "text": f"speech over slide {number}"}
             for number, (start, end) in enumerate(
-                zip([*instants], [*instants[1:], duration], strict=True), start=1
+                zip(starts, [*starts[1:], duration], strict=True), start=1
             )
         ]
         # The raw caption acquire would have left, so `transcribe DIR` has

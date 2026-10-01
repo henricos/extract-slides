@@ -52,9 +52,11 @@ decision, and consolidated into one document:
 The package, the CLI shell, the output directory and the stage registry exist:
 `extract-slides` installs, every command of the surface is there, `manifest.json` is written
 and read, and a run pointed at an existing output directory resumes what an earlier one
-finished and says which stages it reused. **No pipeline stage is implemented yet** — a run
-that has work to do names the stage that would do it and exits 2, and a run given a URL has
-work to do from the first stage.
+finished and says which stages it reused. **Three of the five stages are implemented**:
+`fetch URL` downloads the video and transcribes it from the platform's caption, and
+`detect DIR` runs pass 1 over the downloaded video into `slides/` and the manifest. A run
+that reaches the crop names it as the stage that is missing and exits 2, keeping what the
+earlier stages finished.
 
 ## Development
 

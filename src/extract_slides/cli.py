@@ -32,7 +32,7 @@ from typing import Any, NoReturn
 
 import typer
 
-from extract_slides import __version__, pipeline, transcriber
+from extract_slides import __version__, detector, pipeline, transcriber
 from extract_slides.acquirer import (
     Acquirer,
     DownloaderError,
@@ -40,9 +40,17 @@ from extract_slides.acquirer import (
     YtDlpAcquirer,
     acquire,
 )
-from extract_slides.manifest import Manifest, ManifestError, RunHeader, find_run, run_directory_name
+from extract_slides.manifest import (
+    VIDEO_FILENAME,
+    Manifest,
+    ManifestError,
+    RunHeader,
+    find_run,
+    run_directory_name,
+)
 from extract_slides.pipeline import Stage
 from extract_slides.reporting import ReportFormat, Reporter, StageLog
+from extract_slides.sampler import VideoUnreadable
 
 PROG = "extract-slides"
 
@@ -219,8 +227,8 @@ def _not_implemented_yet(reporter: Reporter, what: str, **details: str) -> NoRet
     reporter.failure(
         f"{what} is not implemented yet.",
         code="not_implemented",
-        hint="This build downloads and transcribes from the platform's captions; "
-        "the stages after that are not in it yet.",
+        hint="This build downloads, transcribes from the platform's captions and "
+        "detects the slides; the stages after that are not in it yet.",
         details=details,
     )
     raise typer.Exit(code=EXIT_FAILURE)
@@ -373,6 +381,13 @@ def _run_pipeline(
             gist = f"{transcript.source}, {len(transcript.cues)} cues"
             log.done(gist)
             return gist
+        if stage is Stage.detect:
+            detected = detector.run(directory, previous=document.slides, log=log)
+            document.slides = detected.slides
+            # The images the crop worked on are gone; whether it runs over
+            # these is a fact the crop records, not one carried over.
+            document.run.cropped = None
+            return detected.gist
         raise pipeline.StageNotImplemented(stage)
 
     completed = pipeline.completed_from(document.completed_stages())
@@ -383,6 +398,24 @@ def _run_pipeline(
         _downloader_failed(reporter, error, directory=str(directory))
     except pipeline.StageNotImplemented as error:
         _not_implemented_yet(reporter, error.stage.value, directory=str(directory))
+    except VideoUnreadable as error:
+        reporter.failure(
+            f"The source video cannot be read: {error}",
+            code="no_video",
+            hint=f"Detection decodes {VIDEO_FILENAME} in the output directory. "
+            "Run extract-slides URL to download it again.",
+            details={"directory": str(directory)},
+        )
+        raise typer.Exit(code=EXIT_FAILURE)
+    except detector.StrangerInTheWay as error:
+        reporter.failure(
+            f"slides/ holds {error} that the manifest does not know, "
+            "and this detection needs the name.",
+            code="stranger_in_slides",
+            hint="Move or rename it, then run detect again. Nothing was changed.",
+            details={"directory": str(directory)},
+        )
+        raise typer.Exit(code=EXIT_FAILURE)
     except transcriber.NoUsableCaption:
         reporter.failure(
             "No usable caption, and local transcription is not in this build yet.",

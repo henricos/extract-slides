@@ -50,6 +50,7 @@ def test_prune_constants_hold_their_measured_values():
 def test_output_constants_hold_their_measured_values():
     # ADR 0009 — the manifest, the pairing rule, JPEG
     assert constants.SLIDE_NUMBER_MIN_DIGITS == 3
+    assert constants.JPEG_QUALITY == 92
 
 
 def test_every_constant_names_the_adr_that_chose_it():
